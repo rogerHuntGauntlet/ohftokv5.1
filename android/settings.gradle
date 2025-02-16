@@ -1,0 +1,29 @@
+def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
+def properties = new Properties()
+
+assert localPropertiesFile.exists()
+localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
+
+def flutterSdkPath = properties.getProperty("flutter.sdk")
+assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+
+apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
+
+// Configure all Android projects in the app
+gradle.beforeProject { project ->
+    project.extensions.findByName('android')?.with { android ->
+        android.buildFeatures.buildConfig = true
+        
+        // Set default namespace for all projects
+        if (!android.hasProperty('namespace')) {
+            def projectPath = project.path.replace(':', '.')
+            if (projectPath == '.app') {
+                android.namespace = "ohftok5.flutter.app"
+            } else {
+                android.namespace = "io.flutter.plugins.${project.name.replace('-', '_').replace(' ', '_')}"
+            }
+        }
+    }
+}
+
+include ':app'

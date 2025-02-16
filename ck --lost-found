@@ -1,0 +1,23 @@
+[33m941ed3c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/token-balance-ui-clean[m[33m, [m[1;31morigin/feature/token-balance-ui[m[33m)[m HEAD@{0}: reset: moving to HEAD~2
+[33mb72725a[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m HEAD@{1}: checkout: moving from main to feature/token-balance-ui-clean
+[33mb72725a[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m HEAD@{2}: checkout: moving from feature/token-balance-ui to main
+[33m4ae2474[m[33m ([m[1;32mfeature/token-balance-ui[m[33m)[m HEAD@{3}: commit: chore: remove service account credentials from git tracking
+[33mbd8f163[m HEAD@{4}: commit: feat: Comprehensive video playback and platform service refactoring
+[33m66e998d[m HEAD@{5}: commit: feat: Update dependencies and refactor home and movie screens
+[33me498243[m HEAD@{6}: commit: feat: Enhance authentication, contacts, and onboarding experience
+[33mff0a951[m HEAD@{7}: commit: feat: Add comprehensive analytics, social features, and token management
+[33meffd626[m HEAD@{8}: commit: feat: Improve scene generation validation and document ID handling
+[33mb786819[m HEAD@{9}: commit: ddsS
+[33m7e4781c[m HEAD@{10}: commit: feat: add token balance UI and purchase instructions - Add TokenBalanceButton widget, replace debug button, add Venmo payment flow
+[33mb72725a[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m HEAD@{11}: checkout: moving from main to feature/token-balance-ui
+[33mb72725a[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m HEAD@{12}: commit: Refactor video generation and scene management in cloud functions and services
+[33mab51b3b[m HEAD@{13}: commit: Add image picker, video generation, and movie scene management features
+[33m941ed3c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/token-balance-ui-clean[m[33m, [m[1;31morigin/feature/token-balance-ui[m[33m)[m HEAD@{14}: commit: Initial commit: Full project setup with Flutter app and Firebase functions
+[33me324ff3[m HEAD@{15}: commit: Clean repository and add only essential files
+[33mdb965a3[m HEAD@{16}: filter-branch: rewrite
+[33m82c68d3[m HEAD@{17}: commit (merge): Update gitignore and env files
+[33mbcb4f1e[m HEAD@{18}: commit: Initial commit: Project setup with environment configuration and documentation
+[33m4820fcd[m HEAD@{19}: commit: Refactor project infrastructure and add AI-powered movie creation features
+[33md5c0ef2[m[33m ([m[1;32mmaster[m[33m)[m HEAD@{20}: filter-branch: rewrite
+[33m930c0b9[m HEAD@{21}: checkout: moving from master to main
+[33m930c0b9[m HEAD@{22}: commit (initial): Initial commit

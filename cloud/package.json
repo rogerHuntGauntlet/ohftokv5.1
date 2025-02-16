@@ -1,0 +1,33 @@
+{
+  "name": "cloud-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for OHFtok",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "build": "echo 'No build step required'"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@langchain/openai": "^0.0.14",
+    "@pinecone-database/pinecone": "^2.0.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "firebase-admin": "^13.1.0",
+    "firebase-functions": "^6.3.2",
+    "langchain": "^0.3.15",
+    "replicate": "^1.0.1"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}

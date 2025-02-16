@@ -1,0 +1,31 @@
+{
+  "functions": {
+    "source": "cloud"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 19099
+    },
+    "functions": {
+      "port": 15001
+    },
+    "firestore": {
+      "port": 18082
+    },
+    "storage": {
+      "port": 19199
+    },
+    "ui": {
+      "enabled": true,
+      "port": 14000
+    },
+    "singleProjectMode": true
+  }
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- reCAPTCHA site key from Firebase Console > Authentication > Settings -->
+    <string name="recaptcha_public_key">6LeOttUqAAAAAMco_cLsCmPt-w0ixUAoX8dUTQcq</string>
+</resources> 

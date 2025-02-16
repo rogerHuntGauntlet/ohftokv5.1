@@ -1,0 +1,58 @@
+{
+  "matches": [
+    {
+      "id": "zettel_chunk_301",
+      "score": 0.80032748,
+      "values": [],
+      "metadata": {
+        "filename": "zettel.md",
+        "source": "Witt-Trans/sections/ch8\\sec10\\zettel.md",
+        "text": "The comparison is wrong. There is no cog here that he is supposed to grasp, the right machine that, once chosen, automatically takes him further. It could be that something like this takes place in our brain, but that is not of interest to us."
+      }
+    },
+    {
+      "id": "PI_chunk_582",
+      "score": 0.792980731,
+      "values": [],
+      "metadata": {
+        "filename": "PI.md",
+        "source": "Witt-Trans/sections/ch8\\0_texts_mds_english\\PI.md",
+        "text": "We might say that a machine, or the picture of it, is the first of a series of \npictures which we have learnt to derive from this one."
+      }
+    },
+    {
+      "id": "PI_chunk_841",
+      "score": 0.787325919,
+      "values": [],
+      "metadata": {
+        "filename": "PI.md",
+        "source": "Witt-Trans/sections/ch8\\0_texts_mds_english\\PI.md",
+        "text": "359 \nWould a machine think?-Could it be in pain?—Well, is 1 \n\n\nthe human body to be called such a machine? It surely comes as close A as \npossible to being such a machine. \n\n\n360 \n\n\nBut a machine surely cannot think!—Is that an empirical statement? No. We \nonly say of a human being and what is like one that it thinks. We also say it \n\n\nof dolls and no doubt of spirits too. Look at the word “to think” as a tool. \n\n\n361 \n\n\nThe chair is thinking to itself:."
+      }
+    },
+    {
+      "id": "phil_grammar_chunk_473",
+      "score": 0.784185,
+      "values": [],
+      "metadata": {
+        "filename": "phil_grammar.md",
+        "source": "Witt-Trans/sections/ch8\\sec2\\phil_grammar.md",
+        "text": "64 If one thinks of thought as something specifically human and \norganic, one is inclined to ask “could there be a prosthetic appara- \ntus for thinking, an inorganic substitute for thought?” But if \nthinking consists only in writing or speaking, why shouldn’t a \nmachine do it? “Yes, but the machine doesn’t know anything.” \nCertainly it is senseless to talk of a prosthetic substitute for seeing \nand hearing. We do talk of artificial feet, but not of artificial pains \nin the foot."
+      }
+    },
+    {
+      "id": "phil_grammar_chunk_081",
+      "score": 0.782073796,
+      "values": [],
+      "metadata": {
+        "filename": "phil_grammar.md",
+        "source": "Witt-Trans/sections/ch8\\sec2\\phil_grammar.md",
+        "text": "97 This is connected with the question whether a machine could \nthink. This is like when we say: “The will can’t be a phenomenon, \nfor whatever phenomenon you take is something that simply \nhappens, not something we do.” But there’s no doubt that you also \nhave experiences when you move your arm voluntarily, although \nthe phenomena of doing are indeed different from the pheno- \nmena of observing. But there are very different cases here. 144"
+      }
+    }
+  ],
+  "namespace": "witt_works",
+  "usage": {
+    "readUnits": 6
+  }
+}
