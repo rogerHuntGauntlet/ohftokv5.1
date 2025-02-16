@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../video/components/video_player.dart';
 import '../../services/fork_services/fork_service.dart';
+import '../../services/user_service.dart';
+import '../../models/user.dart' as app_models;
 import 'package:provider/provider.dart';
 import '../movie/movie_scenes_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MovieVideoPlayerScreen extends StatefulWidget {
   final List<Map<String, dynamic>> scenes;
@@ -25,6 +28,8 @@ class MovieVideoPlayerScreen extends StatefulWidget {
 class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
   late PageController _pageController;
   int _currentIndex = 0;
+  final UserService _userService = UserService();
+  Map<String, String> _directorPhotos = {};
 
   // Helper function to navigate to forked movie
   Future<void> _navigateToForkedMovie(BuildContext context, String newMovieId) async {
@@ -67,6 +72,23 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
     _pageController = PageController(initialPage: widget.initialIndex);
   }
 
+  Future<void> _loadDirectorPhoto(String userId) async {
+    if (_directorPhotos.containsKey(userId)) return;
+    
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (doc.exists && mounted) {
+        final user = app_models.User.fromFirestore(doc);
+        setState(() {
+          _directorPhotos[userId] = user.photoUrl ?? 'https://via.placeholder.com/48';
+        });
+      }
+    } catch (e) {
+      print('Error loading director photo: $e');
+      _directorPhotos[userId] = 'https://via.placeholder.com/48';
+    }
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -93,15 +115,15 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onVerticalDragEnd: (details) {
-          if (details.primaryVelocity! < 0 && _currentIndex < scenesWithVideos.length - 1) {
-            // Swipe up to next video
-            _pageController.nextPage(
+          if (details.primaryVelocity! < 0 && _currentIndex > 0) {
+            // Swipe up to previous video
+            _pageController.previousPage(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
             );
-          } else if (details.primaryVelocity! > 0 && _currentIndex > 0) {
-            // Swipe down to previous video
-            _pageController.previousPage(
+          } else if (details.primaryVelocity! > 0 && _currentIndex < scenesWithVideos.length - 1) {
+            // Swipe down to next video
+            _pageController.nextPage(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
             );
@@ -495,42 +517,103 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Up arrow (show if not last scene)
-                            if (index < scenesWithVideos.length - 1) ...[
-                              const Icon(
-                                Icons.keyboard_arrow_up,
-                                color: Colors.white,
-                                size: 32,
-                              ),
-                              Text(
-                                'Scene ${scene['id'] + 1}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                            // Up arrow
+                            const Icon(
+                              Icons.keyboard_arrow_up,
+                              color: Colors.white,
+                              size: 32,
+                            ),
                             
-                            if (index < scenesWithVideos.length - 1 && index > 0)
-                              const SizedBox(height: 12),
-                              
-                            // Down arrow (show if not first scene)
-                            if (index > 0) ...[
-                              Text(
-                                'Scene ${scene['id'] - 1}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Icon(
-                                Icons.keyboard_arrow_down,
-                                color: Colors.white,
-                                size: 32,
-                              ),
-                            ],
+                            const SizedBox(height: 8),
+                            
+                            // Director's profile photo
+                            FutureBuilder(
+                              future: _loadDirectorPhoto(scene['userId'] ?? widget.userId),
+                              builder: (context, snapshot) {
+                                return GestureDetector(
+                                  onTap: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => Dialog(
+                                        backgroundColor: Colors.transparent,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.9),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ListTile(
+                                                leading: const Icon(Icons.message, color: Colors.white),
+                                                title: const Text(
+                                                  'DM Director',
+                                                  style: TextStyle(color: Colors.white),
+                                                ),
+                                                onTap: () {
+                                                  Navigator.pop(context);
+                                                  // TODO: Implement DM functionality
+                                                },
+                                              ),
+                                              ListTile(
+                                                leading: const Icon(Icons.chat, color: Colors.white),
+                                                title: const Text(
+                                                  'Movie Chat',
+                                                  style: TextStyle(color: Colors.white),
+                                                ),
+                                                onTap: () {
+                                                  Navigator.pop(context);
+                                                  // TODO: Implement Movie Chat functionality
+                                                },
+                                              ),
+                                              ListTile(
+                                                leading: const Icon(Icons.person, color: Colors.white),
+                                                title: const Text(
+                                                  'View Profile',
+                                                  style: TextStyle(color: Colors.white),
+                                                ),
+                                                onTap: () {
+                                                  Navigator.pop(context);
+                                                  // TODO: Navigate to profile
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                      image: DecorationImage(
+                                        image: NetworkImage(
+                                          _directorPhotos[scene['userId'] ?? widget.userId] ?? 
+                                          'https://via.placeholder.com/48'
+                                        ),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            
+                            const SizedBox(height: 8),
+                            
+                            // Down arrow
+                            const Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                              size: 32,
+                            ),
                           ],
                         ),
                       ),
