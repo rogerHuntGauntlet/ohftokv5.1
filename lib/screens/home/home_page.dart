@@ -10,6 +10,7 @@ import '../movie/scene_generation_loading_screen.dart';
 import '../movie/movie_scenes_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../movie/movie_video_player_screen.dart';
+import '../profile/profile_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -304,72 +305,24 @@ class _HomePageState extends State<HomePage> {
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.bug_report),
+              icon: const Icon(Icons.logout),
               onPressed: () async {
-                try {
-                  final service = Provider.of<MovieService>(context, listen: false);
-                  final movies = await service.getAllMovies();
-                  if (mounted) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Database Contents'),
-                        content: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('Found ${movies.length} movies:'),
-                              const SizedBox(height: 8),
-                              ...movies.map((movie) => Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Movie ID: ${movie['documentId']}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text('Idea: ${movie['movieIdea']}'),
-                                      Text('User: ${movie['userId']}'),
-                                      Text('Status: ${movie['status']}'),
-                                      Text('Created: ${_formatTimestamp(movie['createdAt'])}'),
-                                    ],
-                                  ),
-                                ),
-                              )),
-                            ],
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error checking database: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-            IconButton(
-              onPressed: () async {
-                await Provider.of<AuthService>(context, listen: false).signOut();
+                final authService = Provider.of<AuthService>(context, listen: false);
+                await authService.signOut();
                 if (mounted) {
                   Navigator.of(context).pushReplacementNamed('/login');
                 }
               },
-              icon: const Icon(Icons.logout),
+            ),
+            IconButton(
+              icon: const Icon(Icons.person),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileScreen(),
+                  ),
+                );
+              },
             ),
           ],
           bottom: const TabBar(
@@ -585,7 +538,7 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Your Forked Movies',
+                'Your mNp Movies',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -670,7 +623,7 @@ class _HomePageState extends State<HomePage> {
                                   children: [
                                     const Icon(Icons.warning, color: Colors.red),
                                     const SizedBox(width: 8),
-                                    const Text('Delete Forked Movie'),
+                                    const Text('Delete mNp Movie'),
                                   ],
                                 ),
                                 content: Column(
@@ -678,7 +631,7 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      'Are you sure you want to delete this forked movie?',
+                                      'Are you sure you want to delete this mNp movie?',
                                       style: TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 8),
@@ -723,7 +676,7 @@ class _HomePageState extends State<HomePage> {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Forked movie deleted successfully'),
+                                content: Text('mNp movie deleted successfully'),
                                 backgroundColor: Colors.green,
                               ),
                             );
@@ -731,7 +684,7 @@ class _HomePageState extends State<HomePage> {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Error deleting forked movie: $e'),
+                                content: Text('Error deleting mNp movie: $e'),
                                 backgroundColor: Colors.red,
                               ),
                             );
@@ -768,6 +721,65 @@ class _HomePageState extends State<HomePage> {
                                               style: TextStyle(color: Colors.grey[600]),
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.fork_right,
+                                                  size: 14,
+                                                  color: Colors.grey[600],
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'mNp Movie',
+                                                  style: TextStyle(
+                                                    color: Colors.grey[600],
+                                                    fontSize: 12,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                TextButton.icon(
+                                                  onPressed: () async {
+                                                    try {
+                                                      // Get the original movie data
+                                                      final originalMovie = await Provider.of<MovieService>(context, listen: false)
+                                                          .getMovie(movie['forkedFrom']);
+                                                      
+                                                      if (mounted) {
+                                                        Navigator.of(context).push(
+                                                          MaterialPageRoute(
+                                                            builder: (context) => MovieScenesScreen(
+                                                              movieIdea: originalMovie['movieIdea'],
+                                                              scenes: originalMovie['scenes'],
+                                                              movieId: originalMovie['documentId'],
+                                                              movieTitle: originalMovie['title'],
+                                                              isReadOnly: true,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    } catch (e) {
+                                                      if (mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('Error loading original movie: $e'),
+                                                            backgroundColor: Colors.red,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                                  icon: const Icon(Icons.visibility, size: 16),
+                                                  label: const Text('View Original'),
+                                                  style: TextButton.styleFrom(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
@@ -961,13 +973,55 @@ class _HomePageState extends State<HomePage> {
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
-                                                movie['forkedFrom'] != null ? 'Forked Movie' : 'Original Movie',
+                                                movie['forkedFrom'] != null ? 'mNp Movie' : 'Original Movie',
                                                 style: TextStyle(
                                                   color: Colors.grey[600],
                                                   fontSize: 12,
                                                   fontStyle: FontStyle.italic,
                                                 ),
                                               ),
+                                              if (movie['forkedFrom'] != null) ...[
+                                                const SizedBox(width: 8),
+                                                TextButton.icon(
+                                                  onPressed: () async {
+                                                    try {
+                                                      // Get the original movie data
+                                                      final originalMovie = await Provider.of<MovieService>(context, listen: false)
+                                                          .getMovie(movie['forkedFrom']);
+                                                      
+                                                      if (mounted) {
+                                                        Navigator.of(context).push(
+                                                          MaterialPageRoute(
+                                                            builder: (context) => MovieScenesScreen(
+                                                              movieIdea: originalMovie['movieIdea'],
+                                                              scenes: originalMovie['scenes'],
+                                                              movieId: originalMovie['documentId'],
+                                                              movieTitle: originalMovie['title'],
+                                                              isReadOnly: true,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    } catch (e) {
+                                                      if (mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('Error loading original movie: $e'),
+                                                            backgroundColor: Colors.red,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                                  icon: const Icon(Icons.visibility, size: 16),
+                                                  label: const Text('View Original'),
+                                                  style: TextButton.styleFrom(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ],

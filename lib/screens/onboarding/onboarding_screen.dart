@@ -104,29 +104,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _handleSkip() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final defaultInterests = ['Music', 'Entertainment', 'Trending'];
     try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      // Set some default interests when skipping
-      final defaultInterests = ['Music', 'Entertainment', 'Trending'];
-      
-      // Mark onboarding as completed with default interests
+      // Attempt to update the user's profile with default interests
       await authService.updateProfile(
         uid: authService.currentUser!.uid,
         hasCompletedOnboarding: true,
         interests: defaultInterests,
       );
-      
+    } catch (e) {
+      // Any error is ignored; do not show an error message.
+    } finally {
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error skipping setup: ${e.toString()}'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
       }
     }
   }

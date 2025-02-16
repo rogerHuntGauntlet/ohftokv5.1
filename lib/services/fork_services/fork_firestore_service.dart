@@ -16,10 +16,15 @@ class ForkFirestoreService {
       final user = _auth.currentUser;
       if (user == null) throw 'User not authenticated';
 
-      // Create the forked movie document
+      // Get the original movie to access its title
+      final originalMovie = await _firestore.collection('movies').doc(originalMovieId).get();
+      final originalTitle = originalMovie.data()?['title'] ?? 'Untitled';
+
+      // Create the forked movie document with the new title format
       final movieDoc = await _firestore.collection('movies').add({
         'userId': user.uid,
         'movieIdea': movieIdea,
+        'title': '${originalTitle}mPn',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'status': 'forked',
