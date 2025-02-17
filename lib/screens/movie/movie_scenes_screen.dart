@@ -788,7 +788,7 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                           ),
                         ],
                         Dismissible(
-                          key: Key(scene['documentId']),
+                          key: Key(scene['documentId'] ?? UniqueKey().toString()),
                           direction: DismissDirection.endToStart,
                           background: Container(
                             color: Colors.red,

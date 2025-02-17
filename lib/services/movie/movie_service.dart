@@ -93,6 +93,9 @@ class MovieService {
       final batch = FirebaseFirestore.instance.batch();
       final movieRef = FirebaseFirestore.instance.collection('movies').doc(movieId);
       
+      // Create a list to store scenes with their document IDs
+      final scenesWithIds = <Map<String, dynamic>>[];
+      
       for (final scene in scenes) {
         final sceneRef = movieRef.collection('scenes').doc();
         batch.set(sceneRef, {
@@ -100,14 +103,20 @@ class MovieService {
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        
+        // Add the scene with its document ID to our list
+        scenesWithIds.add({
+          ...scene,
+          'documentId': sceneRef.id,
+        });
       }
       
       await batch.commit();
       
       print('Successfully processed ${scenes.length} scenes');
-      print('Final scenes data: $scenes');
+      print('Final scenes data: $scenesWithIds');
       
-      return scenes;
+      return scenesWithIds;
     } catch (e, stackTrace) {
       print('Error generating movie scenes: $e');
       print('Stack trace: $stackTrace');

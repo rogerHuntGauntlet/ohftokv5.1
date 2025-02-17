@@ -93,6 +93,11 @@ dependencies:
   sdp_transform: ^0.3.2
   flutter_callkit_incoming: ^2.0.1+1
 
+  # Sharing functionality
+  firebase_dynamic_links: ^5.4.1
+  share_plus: ^7.2.1
+  qr_flutter: ^4.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

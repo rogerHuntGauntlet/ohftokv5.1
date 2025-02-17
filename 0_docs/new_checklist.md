@@ -235,10 +235,72 @@ This document breaks down the new features and user stories into specific, actio
     - [x] Subscribed streams
 
 - [ ] Sharing & Distribution
-  - [ ] Stream link generation
-  - [ ] Social media sharing
-  - [ ] In-app messaging
-  - [ ] Embed support
+  - [ ] Stream Link Generation
+    - [ ] Unique URL generation system
+      - [ ] Implement URL shortening service
+      - [ ] Add QR code generation
+      - [ ] Create link preview metadata
+      - [ ] Set up link analytics tracking
+      - [ ] Add expirable/permanent link options
+    - [ ] Link Management
+      - [ ] Create link dashboard
+      - [ ] Add link status tracking
+      - [ ] Implement link access controls
+      - [ ] Add link statistics view
+  - [ ] Social Media Integration
+    - [ ] Platform-Specific Integration
+      - [ ] Instagram integration
+        - [ ] Square/vertical video formatting
+        - [ ] Story sharing support
+        - [ ] Reel optimization
+      - [ ] TikTok integration
+        - [ ] Vertical video optimization
+        - [ ] Sound integration
+        - [ ] Effect support
+      - [ ] YouTube integration
+        - [ ] Horizontal format support
+        - [ ] Playlist integration
+        - [ ] Channel management
+      - [ ] Twitter integration
+        - [ ] Video length optimization
+        - [ ] Thread support
+      - [ ] Facebook integration
+        - [ ] Multi-format support
+        - [ ] Page integration
+    - [ ] Content Optimization
+      - [ ] Auto-caption generation
+      - [ ] Hashtag suggestion system
+      - [ ] Thumbnail generation
+      - [ ] Cross-platform analytics
+      - [ ] One-click multi-platform sharing
+  - [ ] In-App Messaging Enhancement
+    - [ ] Share Integration
+      - [ ] Share sheet implementation
+      - [ ] Rich media preview cards
+      - [ ] Quick share buttons
+      - [ ] Bulk sharing options
+    - [ ] Analytics & Tracking
+      - [ ] Share history tracking
+      - [ ] Engagement analytics
+      - [ ] Click-through tracking
+    - [ ] Content Management
+      - [ ] Shared content caching
+      - [ ] CDN integration
+      - [ ] Rate limiting system
+      - [ ] Spam prevention
+  - [ ] Embed Support
+    - [ ] Embed Code Generation
+      - [ ] Responsive iframe generation
+      - [ ] Custom size options
+      - [ ] Theme customization
+    - [ ] Player Features
+      - [ ] Custom player controls
+      - [ ] Branding options
+      - [ ] Interactive elements
+    - [ ] Security
+      - [ ] Domain whitelisting
+      - [ ] Embed permissions
+      - [ ] Usage tracking
 
 - [x] Video Implementation
   - [x] WebRTC integration
