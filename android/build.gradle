@@ -8,7 +8,7 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.1.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath 'com.google.gms:google-services:4.3.15'
+        classpath 'com.google.gms:google-services:4.4.0'
     }
 }
 
@@ -16,6 +16,43 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url "https://jitpack.io" }
+    }
+
+    configurations.all {
+        resolutionStrategy {
+            force 'androidx.core:core-ktx:1.9.0'
+            force 'androidx.annotation:annotation:1.6.0'
+            force 'com.github.webrtc-sdk:android:114.5735.10'
+            
+            eachDependency { details ->
+                if (details.requested.group == 'org.webrtc' && details.requested.name == 'google-webrtc') {
+                    details.useTarget 'com.github.webrtc-sdk:android:114.5735.10'
+                }
+            }
+        }
+    }
+}
+
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            android {
+                compileSdkVersion 34
+                
+                if (project.name == 'flutter_webrtc') {
+                    namespace = "com.cloudwebrtc.webrtc"
+                    defaultConfig {
+                        minSdkVersion 24
+                        targetSdkVersion 34
+                    }
+                    dependencies {
+                        implementation "androidx.core:core-ktx:1.12.0"
+                        implementation 'com.github.webrtc-sdk:android:114.5735.10'
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -28,3 +65,5 @@ subprojects {
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
+
+

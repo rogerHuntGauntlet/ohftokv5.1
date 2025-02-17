@@ -14,12 +14,19 @@ dependencies:
   google_fonts: ^6.1.0
 
   # Firebase packages
-  firebase_core: ^2.24.2
-  firebase_auth: ^4.15.3
-  cloud_firestore: ^4.13.6
-  firebase_storage: ^11.5.6
-  firebase_messaging: ^14.7.10
-  firebase_app_check: ^0.2.1+8
+  firebase_core: ^3.11.0
+  firebase_auth: ^5.4.2
+  cloud_firestore: ^5.6.3
+  firebase_storage: ^12.4.2
+  firebase_messaging: ^15.2.2
+  firebase_app_check: ^0.3.2+2
+  firebase_analytics: ^11.4.2
+  firebase_dynamic_links: ^6.1.2
+
+  # Calendar and Notifications
+  device_calendar: ^4.3.2
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.2
 
   # State management & dependency injection
   provider: ^6.1.1
@@ -32,7 +39,7 @@ dependencies:
   dart_openai: ^5.0.0
 
   # Permissions
-  permission_handler: ^10.2.0
+  permission_handler: ^11.0.1
 
   # Video optimization and caching
   cached_network_image: ^3.3.0
@@ -58,7 +65,7 @@ dependencies:
   pinecone: ^0.7.2
 
   # Cloud Functions
-  cloud_functions: ^4.5.8
+  cloud_functions: ^5.3.2
 
   # Image picker and file handling
   image_picker: ^1.0.7
@@ -69,7 +76,7 @@ dependencies:
 
   # Voice message dependencies
   record: ^5.0.1
-  audioplayers: ^5.2.1
+  audioplayers: ^6.1.2
   path_provider: ^2.1.2
   uuid: ^4.5.1
   timeago: ^3.6.0
@@ -78,25 +85,33 @@ dependencies:
   ffmpeg_kit_flutter: ^6.0.3
 
   # Camera
-  camera: ^0.10.5+9
+  camera: ^0.11.1
 
   # Gemini AI
-  google_generative_ai: ^0.2.0
+  google_generative_ai: ^0.4.6
 
   # Location services
-  geolocator: ^10.1.0
-  geocoding: ^2.1.1
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
   google_maps_flutter: ^2.5.3
 
   # WebRTC
-  flutter_webrtc: ^0.9.47
+  flutter_webrtc: ^0.9.48+hotfix.1
   sdp_transform: ^0.3.2
   flutter_callkit_incoming: ^2.0.1+1
 
   # Sharing functionality
-  firebase_dynamic_links: ^5.4.1
-  share_plus: ^7.2.1
+  share_plus: ^10.1.4
   qr_flutter: ^4.1.0
+  video_compress: ^3.1.2
+
+# Platform specific configurations
+dependency_overrides:
+  file_picker:
+    git:
+      url: https://github.com/miguelpruivo/flutter_file_picker.git
+      ref: master
+  webrtc_interface: 1.0.13
 
 dev_dependencies:
   flutter_test:

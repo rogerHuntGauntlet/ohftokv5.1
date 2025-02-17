@@ -40,10 +40,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     await _remoteRenderer.initialize();
 
     // Listen for remote video stream
-    widget.callService.remoteVideoStream.listen((remoteVideo) {
-      setState(() {
-        _remoteRenderer.srcObject = remoteVideo.srcObject;
-      });
+    widget.callService.remoteVideoStream.listen((remoteVideo) async {
+      if (mounted) {
+        setState(() {
+          _remoteRenderer.srcObject = remoteVideo.srcObject;
+        });
+      }
     });
 
     if (widget.isIncoming) {
@@ -91,14 +93,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   Widget _buildRemoteVideo() {
-    return _remoteRenderer.srcObject != null
-        ? RTCVideoView(
-            _remoteRenderer,
-            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-          )
-        : const Center(
-            child: CircularProgressIndicator(),
-          );
+    return RTCVideoView(
+      _remoteRenderer,
+      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+      mirror: false,
+      filterQuality: FilterQuality.low,
+    );
   }
 
   Widget _buildLocalVideo() {
@@ -127,6 +127,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     _localRenderer,
                     mirror: true,
                     objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                    filterQuality: FilterQuality.low,
                   ),
           ),
         ),

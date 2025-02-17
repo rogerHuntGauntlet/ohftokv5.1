@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../models/live/live_stream.dart';
 import '../../models/live/live_comment.dart';
 import '../../models/live/live_reaction.dart';
@@ -13,12 +13,13 @@ import '../../services/live/live_question_service.dart';
 import '../../services/live/live_story_prompt_service.dart';
 import '../../services/live/live_overlay_service.dart';
 import '../../services/social/auth_service.dart';
+import '../../services/streaming/video_streaming_service.dart';
 import 'widgets/live_chat_widget.dart';
 import 'widgets/live_reactions_widget.dart';
 import 'widgets/live_viewer_list.dart';
 import 'widgets/live_stream_controls.dart';
 import 'widgets/live_poll_widget.dart';
-import 'widgets/live_question_widget.dart';
+import 'widgets/live_qa_widget.dart';
 import 'widgets/live_story_prompt_widget.dart';
 import 'widgets/live_overlay_widget.dart';
 
@@ -29,7 +30,7 @@ class LiveStreamScreen extends StatefulWidget {
   const LiveStreamScreen({
     Key? key,
     required this.streamId,
-    this.isHost = false,
+    required this.isHost,
   }) : super(key: key);
 
   @override
@@ -37,247 +38,237 @@ class LiveStreamScreen extends StatefulWidget {
 }
 
 class _LiveStreamScreenState extends State<LiveStreamScreen> {
-  late final LiveStreamService _streamService;
-  late final LiveCommentService _commentService;
-  late final LiveReactionService _reactionService;
-  late final LiveViewerService _viewerService;
-  late final LivePollService _pollService;
-  late final LiveQuestionService _questionService;
-  late final LiveStoryPromptService _storyPromptService;
-  late final LiveOverlayService _overlayService;
+  final VideoStreamingService _streamingService = VideoStreamingService();
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  bool _isInitialized = false;
+  String? _error;
+  bool _showInteractiveFeatures = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeServices();
+    _initialize();
   }
 
-  Future<void> _initializeServices() async {
-    final userId = context.read<AuthService>().currentUser?.uid;
-    if (userId == null) return;
+  Future<void> _initialize() async {
+    try {
+      await _localRenderer.initialize();
+      
+      if (widget.isHost) {
+        await _streamingService.initializeStream(
+          streamId: widget.streamId,
+          localRenderer: _localRenderer,
+          quality: StreamQuality.high,
+          latency: StreamLatency.low,
+        );
+      }
 
-    // Initialize all services
-    _streamService = LiveStreamService();
-    _commentService = LiveCommentService();
-    _reactionService = LiveReactionService();
-    _viewerService = LiveViewerService();
-    _pollService = LivePollService();
-    _questionService = LiveQuestionService();
-    _storyPromptService = LiveStoryPromptService();
-    _overlayService = LiveOverlayService();
-
-    await _streamService.initialize(widget.streamId);
-    _commentService.initialize(widget.streamId);
-    _reactionService.initialize(widget.streamId);
-    await _viewerService.initialize(widget.streamId, userId);
-
-    // Join as viewer if not host
-    if (!widget.isHost) {
-      final user = context.read<AuthService>().currentUser!;
-      await _viewerService.joinStream(
-        streamId: widget.streamId,
-        userId: user.uid,
-        userDisplayName: user.displayName ?? 'Anonymous',
-        userProfileImage: user.photoURL,
-      );
+      if (mounted) {
+        setState(() => _isInitialized = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = e.toString());
+      }
+      print('Error initializing stream: $e');
     }
   }
 
   @override
   void dispose() {
-    // Clean up services
-    _streamService.dispose();
-    _commentService.dispose();
-    _reactionService.dispose();
-    _viewerService.dispose();
+    _streamingService.dispose();
+    _localRenderer.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: _streamService),
-        ChangeNotifierProvider.value(value: _commentService),
-        ChangeNotifierProvider.value(value: _reactionService),
-        ChangeNotifierProvider.value(value: _viewerService),
-      ],
-      child: Scaffold(
-        body: SafeArea(
-          child: StreamBuilder<LiveStream>(
-            stream: _streamService.getStream(widget.streamId),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Center(
-                  child: Text('Error loading stream'),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Video view
+          if (_isInitialized && _error == null)
+            Positioned.fill(
+              child: RTCVideoView(
+                _localRenderer,
+                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                mirror: true,
+                filterQuality: FilterQuality.low,
+              ),
+            )
+          else if (_error != null)
+            Center(
+              child: Text(
+                'Error: $_error',
+                style: const TextStyle(color: Colors.white),
+              ),
+            )
+          else
+            const Center(
+              child: CircularProgressIndicator(),
+            ),
+
+          // Interactive features
+          if (_isInitialized && _showInteractiveFeatures)
+            Positioned(
+              top: 80,
+              bottom: 80,
+              right: 16,
+              width: 300,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    LivePollWidget(
+                      streamId: widget.streamId,
+                      isHost: widget.isHost,
+                    ),
+                    const SizedBox(height: 16),
+                    LiveQAWidget(
+                      streamId: widget.streamId,
+                      isHost: widget.isHost,
+                    ),
+                    const SizedBox(height: 16),
+                    LiveStoryPromptWidget(
+                      streamId: widget.streamId,
+                      isHost: widget.isHost,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Interactive features toggle button
+          if (_isInitialized)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: SafeArea(
+                child: IconButton(
+                  icon: Icon(
+                    _showInteractiveFeatures
+                        ? Icons.close
+                        : Icons.chat_bubble_outline,
+                    color: Colors.white,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showInteractiveFeatures = !_showInteractiveFeatures;
+                    });
+                  },
+                ),
+              ),
+            ),
+
+          // Stream controls
+          if (_isInitialized)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: LiveStreamControls(
+                streamId: widget.streamId,
+                isHost: widget.isHost,
+                onEndStream: () {
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+
+          // Status bar (viewers count, duration, etc.)
+          if (_isInitialized)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _StreamStatusBar(
+                streamId: widget.streamId,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreamStatusBar extends StatelessWidget {
+  final String streamId;
+
+  const _StreamStatusBar({
+    Key? key,
+    required this.streamId,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withOpacity(0.8),
+            Colors.transparent,
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            // Live indicator
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'LIVE',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Stream duration
+            StreamBuilder<Duration>(
+              stream: Stream.periodic(
+                const Duration(seconds: 1),
+                (count) => Duration(seconds: count),
+              ),
+              builder: (context, snapshot) {
+                final duration = snapshot.data ?? Duration.zero;
+                final hours = duration.inHours;
+                final minutes = duration.inMinutes.remainder(60);
+                final seconds = duration.inSeconds.remainder(60);
+                return Text(
+                  '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: Colors.white),
                 );
-              }
-
-              if (!snapshot.hasData) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
-
-              final stream = snapshot.data!;
-              return Stack(
-                children: [
-                  // Main content area (video stream)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black,
-                      // TODO: Implement video player
-                      child: const Center(
-                        child: Text(
-                          'Video Stream',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Interactive overlays
-                  Positioned.fill(
-                    child: LiveOverlayWidget(
-                      streamId: widget.streamId,
-                      overlayService: _overlayService,
-                      isHost: widget.isHost,
-                    ),
-                  ),
-
-                  // Stream info overlay (top)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withOpacity(0.7),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            stream.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          StreamBuilder<List<LiveViewer>>(
-                            stream: _viewerService.getActiveViewers(widget.streamId),
-                            builder: (context, snapshot) {
-                              final viewerCount = snapshot.data?.length ?? 0;
-                              return Text(
-                                '$viewerCount viewers',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Chat overlay (right)
-                  Positioned(
-                    top: 80,
-                    bottom: 80,
-                    right: 0,
-                    width: 300,
-                    child: LiveChatWidget(
-                      streamId: widget.streamId,
-                      commentService: _commentService,
-                      viewerService: _viewerService,
-                    ),
-                  ),
-
-                  // Reactions overlay (bottom left)
-                  Positioned(
-                    bottom: 80,
-                    left: 16,
-                    child: LiveReactionsWidget(
-                      streamId: widget.streamId,
-                      reactionService: _reactionService,
-                    ),
-                  ),
-
-                  // Poll overlay (center left)
-                  Positioned(
-                    top: 80,
-                    left: 16,
-                    width: 300,
-                    height: 200,
-                    child: LivePollWidget(
-                      streamId: widget.streamId,
-                      pollService: _pollService,
-                      isHost: widget.isHost,
-                    ),
-                  ),
-
-                  // Q&A overlay (center left, below polls)
-                  Positioned(
-                    top: 300,
-                    left: 16,
-                    width: 300,
-                    height: 200,
-                    child: LiveQuestionWidget(
-                      streamId: widget.streamId,
-                      questionService: _questionService,
-                      isHost: widget.isHost,
-                    ),
-                  ),
-
-                  // Story Prompts overlay (center left, below Q&A)
-                  Positioned(
-                    top: 520,
-                    bottom: 160,
-                    left: 16,
-                    width: 300,
-                    child: LiveStoryPromptWidget(
-                      streamId: widget.streamId,
-                      promptService: _storyPromptService,
-                      isHost: widget.isHost,
-                    ),
-                  ),
-
-                  // Stream controls (bottom)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: LiveStreamControls(
-                      streamId: widget.streamId,
-                      isHost: widget.isHost,
-                      streamService: _streamService,
-                    ),
-                  ),
-
-                  // Viewer list (top right)
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: LiveViewerList(
-                      streamId: widget.streamId,
-                      viewerService: _viewerService,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+              },
+            ),
+            const Spacer(),
+            // Viewers count
+            Row(
+              children: [
+                const Icon(
+                  Icons.remove_red_eye,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  '0', // TODO: Implement real viewer count
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

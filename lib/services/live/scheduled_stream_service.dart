@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../models/live/scheduled_stream.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 
 class ScheduledStreamService {
   final FirebaseFirestore _firestore;
@@ -15,7 +17,9 @@ class ScheduledStreamService {
     FlutterLocalNotificationsPlugin? notificationsPlugin,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _calendarPlugin = calendarPlugin ?? DeviceCalendarPlugin(),
-        _notificationsPlugin = notificationsPlugin ?? FlutterLocalNotificationsPlugin();
+        _notificationsPlugin = notificationsPlugin ?? FlutterLocalNotificationsPlugin() {
+    tz.initializeTimeZones();
+  }
 
   Future<void> initialize() async {
     // Initialize notifications
@@ -66,7 +70,7 @@ class ScheduledStreamService {
 
     final doc = await _firestore.collection(_collection).add(stream);
     await _scheduleNotifications(doc.id, title, scheduledStart);
-    await _addToCalendar(title, description ?? '', scheduledStart, duration);
+    await _createCalendarEvent(title, description ?? '', scheduledStart, duration);
     return doc.id;
   }
 
@@ -214,7 +218,7 @@ class ScheduledStreamService {
     final stream = await getScheduledStream(streamId);
     if (stream != null) {
       await _scheduleNotifications(streamId, stream.title, stream.scheduledStart);
-      await _addToCalendar(
+      await _createCalendarEvent(
         stream.title,
         stream.description ?? '',
         stream.scheduledStart,
@@ -244,36 +248,47 @@ class ScheduledStreamService {
     String title,
     DateTime scheduledStart,
   ) async {
-    // Schedule notifications at different intervals
-    final notifications = [
-      const Duration(days: 1),
-      const Duration(hours: 1),
-      const Duration(minutes: 5),
-    ];
+    final notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'scheduled_streams',
+        'Scheduled Streams',
+        channelDescription: 'Notifications for scheduled live streams',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: const DarwinNotificationDetails(),
+    );
 
-    for (final notification in notifications) {
-      final notificationTime = scheduledStart.subtract(notification);
-      if (notificationTime.isAfter(DateTime.now())) {
-        await _notificationsPlugin.zonedSchedule(
-          int.parse('${streamId.hashCode}${notification.inMinutes}'),
-          'Upcoming Stream',
-          '$title starts in ${_formatDuration(notification)}',
-          TZDateTime.from(notificationTime, local),
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'scheduled_streams',
-              'Scheduled Streams',
-              channelDescription: 'Notifications for scheduled streams',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-            iOS: DarwinNotificationDetails(),
-          ),
-          androidAllowWhileIdle: true,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-        );
-      }
+    // Schedule notification 15 minutes before
+    final fifteenMinBefore = tz.TZDateTime.from(
+      scheduledStart.subtract(const Duration(minutes: 15)),
+      tz.local,
+    );
+
+    if (fifteenMinBefore.isAfter(DateTime.now())) {
+      await _notificationsPlugin.zonedSchedule(
+        int.parse('${streamId.hashCode}1'),
+        'Stream Starting Soon',
+        'The stream "$title" will begin in 15 minutes',
+        fifteenMinBefore,
+        notificationDetails,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
+
+    // Schedule notification at start time
+    final startTime = tz.TZDateTime.from(scheduledStart, tz.local);
+    if (startTime.isAfter(DateTime.now())) {
+      await _notificationsPlugin.zonedSchedule(
+        int.parse('${streamId.hashCode}2'),
+        'Stream Starting Now',
+        'The stream "$title" is starting now',
+        startTime,
+        notificationDetails,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
     }
   }
 
@@ -302,32 +317,35 @@ class ScheduledStreamService {
   }
 
   // Calendar methods
-  Future<void> _addToCalendar(
+  Future<void> _createCalendarEvent(
     String title,
     String description,
     DateTime start,
     Duration duration,
   ) async {
-    try {
-      final calendars = await _calendarPlugin.retrieveCalendars();
-      final calendar = calendars.firstWhere(
-        (cal) => cal.isReadOnly == false,
-        orElse: () => calendars.first,
-      );
+    final calendarsResult = await _calendarPlugin.retrieveCalendars();
+    final calendars = calendarsResult.data;
+    
+    if (calendars == null || calendars.isEmpty) return;
+    
+    final calendar = calendars.firstWhere(
+      (cal) => cal.isReadOnly == false,
+      orElse: () => calendars.first,
+    );
 
-      final event = Event(
-        calendar.id,
-        title: title,
-        description: description,
-        start: start,
-        end: start.add(duration),
-      );
+    final location = tz.local;
+    final tzStart = tz.TZDateTime.from(start, location);
+    final tzEnd = tz.TZDateTime.from(start.add(duration), location);
 
-      await _calendarPlugin.createOrUpdateEvent(event);
-    } catch (e) {
-      // Handle calendar access errors
-      print('Error adding to calendar: $e');
-    }
+    final event = Event(
+      calendar.id,
+      title: title,
+      description: description,
+      start: tzStart,
+      end: tzEnd,
+    );
+
+    await _calendarPlugin.createOrUpdateEvent(event);
   }
 
   Future<void> _updateCalendarEvent(
@@ -336,71 +354,81 @@ class ScheduledStreamService {
     DateTime start,
     Duration duration,
   ) async {
-    try {
-      final calendars = await _calendarPlugin.retrieveCalendars();
-      final calendar = calendars.firstWhere(
-        (cal) => cal.isReadOnly == false,
-        orElse: () => calendars.first,
-      );
+    final calendarsResult = await _calendarPlugin.retrieveCalendars();
+    final calendars = calendarsResult.data;
+    
+    if (calendars == null || calendars.isEmpty) return;
 
-      final events = await _calendarPlugin.retrieveEvents(
+    final calendar = calendars.firstWhere(
+      (cal) => cal.isReadOnly == false,
+      orElse: () => calendars.first,
+    );
+
+    final eventsResult = await _calendarPlugin.retrieveEvents(
+      calendar.id,
+      RetrieveEventsParams(
+        startDate: DateTime.now().subtract(const Duration(days: 30)),
+        endDate: DateTime.now().add(const Duration(days: 365)),
+      ),
+    );
+
+    final events = eventsResult.data;
+    if (events == null || events.isEmpty) return;
+
+    final existingEvent = events.firstWhere(
+      (e) => e.title?.contains(title.replaceAll('(CANCELLED) ', '')) ?? false,
+      orElse: () => Event(
         calendar.id,
-        RetrieveEventsParams(
-          startDate: start.subtract(const Duration(minutes: 1)),
-          endDate: start.add(const Duration(minutes: 1)),
-        ),
-      );
+        title: title,
+        description: description,
+        start: tz.TZDateTime.from(start, tz.local),
+        end: tz.TZDateTime.from(start.add(duration), tz.local),
+      ),
+    );
 
-      final event = events?.firstWhere(
-        (e) => e.title?.contains(title.replaceAll('(CANCELLED) ', '')) ?? false,
-        orElse: () => Event(
-          calendar.id,
-          title: title,
-          description: description,
-          start: start,
-          end: start.add(duration),
-        ),
-      );
+    existingEvent.title = title;
+    existingEvent.description = description;
+    existingEvent.start = tz.TZDateTime.from(start, tz.local);
+    existingEvent.end = tz.TZDateTime.from(start.add(duration), tz.local);
 
-      event?.title = title;
-      event?.description = description;
-      event?.start = start;
-      event?.end = start.add(duration);
-
-      await _calendarPlugin.createOrUpdateEvent(event);
-    } catch (e) {
-      // Handle calendar access errors
-      print('Error updating calendar event: $e');
-    }
+    await _calendarPlugin.createOrUpdateEvent(existingEvent);
   }
 
   Future<void> _removeFromCalendar(String title) async {
-    try {
-      final calendars = await _calendarPlugin.retrieveCalendars();
-      final calendar = calendars.firstWhere(
-        (cal) => cal.isReadOnly == false,
-        orElse: () => calendars.first,
-      );
+    final calendarsResult = await _calendarPlugin.retrieveCalendars();
+    final calendars = calendarsResult.data;
+    
+    if (calendars == null || calendars.isEmpty) return;
 
-      final events = await _calendarPlugin.retrieveEvents(
+    final calendar = calendars.firstWhere(
+      (cal) => cal.isReadOnly == false,
+      orElse: () => calendars.first,
+    );
+
+    final eventsResult = await _calendarPlugin.retrieveEvents(
+      calendar.id,
+      RetrieveEventsParams(
+        startDate: DateTime.now().subtract(const Duration(days: 30)),
+        endDate: DateTime.now().add(const Duration(days: 365)),
+      ),
+    );
+
+    final events = eventsResult.data;
+    if (events == null) return;
+
+    final event = events.firstWhere(
+      (e) => e.title?.contains(title.replaceAll('(CANCELLED) ', '')) ?? false,
+      orElse: () => Event(
         calendar.id,
-        RetrieveEventsParams(
-          startDate: DateTime.now().subtract(const Duration(days: 30)),
-          endDate: DateTime.now().add(const Duration(days: 365)),
-        ),
-      );
+        title: title,
+        description: '',
+        start: tz.TZDateTime.now(tz.local),
+        end: tz.TZDateTime.now(tz.local).add(const Duration(hours: 1)),
+      ),
+    );
 
-      final event = events?.firstWhere(
-        (e) => e.title?.contains(title.replaceAll('(CANCELLED) ', '')) ?? false,
-        orElse: () => null,
-      );
-
-      if (event != null) {
-        await _calendarPlugin.deleteEvent(calendar.id, event.eventId);
-      }
-    } catch (e) {
-      // Handle calendar access errors
-      print('Error removing calendar event: $e');
+    if (event.eventId != null) {
+      await _calendarPlugin.deleteEvent(calendar.id, event.eventId!);
     }
   }
 

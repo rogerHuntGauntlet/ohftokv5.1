@@ -5,6 +5,7 @@ import '../feed/feed_screen.dart';
 import '../find_movies/find_movies_screen.dart';
 import '../messaging/conversation_list_screen.dart';
 import '../training/director_training_screen.dart';
+import '../live/scheduled_streams_screen.dart';
 import 'dialogs/recording_dialog.dart';
 import 'tabs/movies_tab.dart';
 import 'tabs/forks_tab.dart';
@@ -196,6 +197,17 @@ class _HomePageState extends State<HomePage> {
             getTargetPosition: _getCreateButtonPosition,
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.live_tv),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ScheduledStreamsScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Live Streams',
+            ),
             IconButton(
               icon: const Icon(Icons.school),
               onPressed: () {

@@ -1,3 +1,24 @@
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        def propertiesFile = new File(rootProject.projectDir, "local.properties")
+        if (propertiesFile.exists()) {
+            properties.load(new FileInputStream(propertiesFile))
+            return properties.getProperty('flutter.sdk')
+        } else {
+            return System.getenv("FLUTTER_ROOT")
+        }
+    }
+
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+include ':app'
+
 def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
 def properties = new Properties()
 
@@ -6,24 +27,30 @@ localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
 
 def flutterSdkPath = properties.getProperty("flutter.sdk")
 assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-
 apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
 
-// Configure all Android projects in the app
+// Configure Android projects
 gradle.beforeProject { project ->
-    project.extensions.findByName('android')?.with { android ->
-        android.buildFeatures.buildConfig = true
-        
-        // Set default namespace for all projects
-        if (!android.hasProperty('namespace')) {
-            def projectPath = project.path.replace(':', '.')
-            if (projectPath == '.app') {
-                android.namespace = "ohftok5.flutter.app"
-            } else {
-                android.namespace = "io.flutter.plugins.${project.name.replace('-', '_').replace(' ', '_')}"
+    project.setProperty("android.useAndroidX", true)
+    project.setProperty("android.enableJetifier", true)
+    
+    if (project.hasProperty('android')) {
+        project.android {
+            if (project.name == 'app') {
+                namespace "ohftok5.flutter.app"
             }
+            compileSdkVersion 34
         }
     }
 }
 
-include ':app'
+def getNamespaceForProject(project) {
+    switch (project.name) {
+        case 'app':
+            return "ohftok5.flutter.app"
+        case 'flutter_webrtc':
+            return "com.cloudwebrtc.webrtc"
+        default:
+            return "com.${project.name.replace('-', '_').replace(' ', '_').toLowerCase()}"
+    }
+}

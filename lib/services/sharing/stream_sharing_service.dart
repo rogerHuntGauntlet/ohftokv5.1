@@ -2,39 +2,30 @@ import 'package:firebase_dynamic_links/firebase_dynamic_links.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'base_sharing_service.dart';
 
-class StreamSharingService {
+class StreamSharingService extends BaseSharingService {
   final FirebaseDynamicLinks _dynamicLinks = FirebaseDynamicLinks.instance;
   
   /// Generates a unique, shareable URL for a stream
-  Future<String> generateStreamLink({
-    required String streamId,
-    required String streamTitle,
+  @override
+  Future<String> generateDynamicLink({
+    required String path,
+    required String title,
     String? description,
     String? thumbnailUrl,
-    bool isExpirable = false,
+    bool isExpirable = true,
     Duration? expiryDuration,
+    String? streamId,
   }) async {
-    final DynamicLinkParameters parameters = DynamicLinkParameters(
-      uriPrefix: 'https://ohftok.page.link',
-      link: Uri.parse('https://ohftok.com/stream/$streamId'),
-      androidParameters: const AndroidParameters(
-        packageName: 'com.ohftok.app',
-        minimumVersion: 0,
-      ),
-      iosParameters: const IOSParameters(
-        bundleId: 'com.ohftok.app',
-        minimumVersion: '0',
-      ),
-      socialMetaTagParameters: SocialMetaTagParameters(
-        title: streamTitle,
-        description: description ?? 'Join this live stream on OHFtok!',
-        imageUrl: thumbnailUrl != null ? Uri.parse(thumbnailUrl) : null,
-      ),
+    return super.generateDynamicLink(
+      path: streamId != null ? '/stream/$streamId' : path,
+      title: title,
+      description: description ?? 'Join this live stream on OHFtok!',
+      thumbnailUrl: thumbnailUrl,
+      isExpirable: isExpirable,
+      expiryDuration: expiryDuration ?? const Duration(hours: 24),
     );
-
-    final shortLink = await _dynamicLinks.buildShortLink(parameters);
-    return shortLink.shortUrl.toString();
   }
 
   /// Generates a QR code for a stream
@@ -53,8 +44,11 @@ class StreamSharingService {
     required String streamTitle,
     String? message,
   }) async {
-    final String shareMessage = message ?? 'Join my live stream: $streamTitle';
-    await Share.share('$shareMessage\n$streamUrl');
+    await shareContent(
+      url: streamUrl,
+      title: streamTitle,
+      message: message,
+    );
   }
 
   /// Tracks link clicks and engagement
