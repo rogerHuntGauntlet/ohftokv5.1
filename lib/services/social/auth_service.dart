@@ -227,4 +227,23 @@ class AuthService {
       interests: interests,
     );
   }
+
+  Future<Map<String, dynamic>> getUserDetails(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        return {
+          'username': 'Unknown User',
+          'photoUrl': null,
+        };
+      }
+      return userDoc.data() as Map<String, dynamic>;
+    } catch (e) {
+      print('Error getting user details: $e');
+      return {
+        'username': 'Unknown User',
+        'photoUrl': null,
+      };
+    }
+  }
 } 

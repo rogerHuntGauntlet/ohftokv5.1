@@ -18,7 +18,7 @@ dependencies:
   firebase_auth: ^4.15.3
   cloud_firestore: ^4.13.6
   firebase_storage: ^11.5.6
-  firebase_messaging: ^14.7.9
+  firebase_messaging: ^14.7.10
   firebase_app_check: ^0.2.1+8
 
   # State management & dependency injection
@@ -32,7 +32,7 @@ dependencies:
   dart_openai: ^5.0.0
 
   # Permissions
-  permission_handler: ^11.3.0
+  permission_handler: ^10.2.0
 
   # Video optimization and caching
   cached_network_image: ^3.3.0
@@ -60,8 +60,38 @@ dependencies:
   # Cloud Functions
   cloud_functions: ^4.5.8
 
-  # Image picker
+  # Image picker and file handling
   image_picker: ^1.0.7
+  file_picker: ^6.1.1
+
+  # Encryption
+  crypto: ^3.0.3
+
+  # Voice message dependencies
+  record: ^5.0.1
+  audioplayers: ^5.2.1
+  path_provider: ^2.1.2
+  uuid: ^4.5.1
+  timeago: ^3.6.0
+
+  # Video editing
+  ffmpeg_kit_flutter: ^6.0.3
+
+  # Camera
+  camera: ^0.10.5+9
+
+  # Gemini AI
+  google_generative_ai: ^0.2.0
+
+  # Location services
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  google_maps_flutter: ^2.5.3
+
+  # WebRTC
+  flutter_webrtc: ^0.9.47
+  sdp_transform: ^0.3.2
+  flutter_callkit_incoming: ^2.0.1+1
 
 dev_dependencies:
   flutter_test:

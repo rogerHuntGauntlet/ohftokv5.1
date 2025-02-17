@@ -31,7 +31,7 @@ class MovieFirestoreService {
         'movieIdea': movieIdea,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        'status': 'draft',
+        'status': 'in_progress',
         'isPublic': false,
         'likes': 0,
         'views': 0,
@@ -48,12 +48,15 @@ class MovieFirestoreService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
-      await batch.commit();
 
-      // Update user's movies count
-      await _firestore.collection('users').doc(user.uid).update({
-        'moviesCount': FieldValue.increment(1),
+      // Update user's movie counts
+      final userRef = _firestore.collection('users').doc(user.uid);
+      batch.update(userRef, {
+        'totalMoviesCreated': FieldValue.increment(1),
+        'movieIds': FieldValue.arrayUnion([movieDoc.id]),
       });
+
+      await batch.commit();
 
       return movieDoc.id;
     } catch (e) {
@@ -221,12 +224,21 @@ class MovieFirestoreService {
 
       // Get movie reference
       final movieRef = _firestore.collection('movies').doc(movieId);
+      final userRef = _firestore.collection('users').doc(user.uid);
       
       // Get all scenes to delete their videos later if needed
       final scenesSnapshot = await movieRef.collection('scenes').get();
       
-      // Delete all scenes in a batch
+      // Delete all scenes and update counts in a batch
       final batch = _firestore.batch();
+      
+      // Update user's movie counts
+      batch.update(userRef, {
+        'totalMoviesCreated': FieldValue.increment(-1),
+        'movieIds': FieldValue.arrayRemove([movieId]),
+      });
+      
+      // Delete scenes
       for (final scene in scenesSnapshot.docs) {
         batch.delete(scene.reference);
       }
@@ -236,11 +248,6 @@ class MovieFirestoreService {
       
       // Commit the batch
       await batch.commit();
-
-      // Update user's movies count
-      await _firestore.collection('users').doc(user.uid).update({
-        'moviesCount': FieldValue.increment(-1),
-      });
     } catch (e) {
       print('Error deleting movie: $e');
       throw 'Failed to delete movie';
@@ -287,5 +294,59 @@ class MovieFirestoreService {
           
           return movies;
         });
+  }
+
+  Future<void> updateMovieStatus(String movieId, String status) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw 'User not authenticated';
+
+      final batch = _firestore.batch();
+      
+      // Update movie status
+      final movieRef = _firestore.collection('movies').doc(movieId);
+      batch.update(movieRef, {
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+    } catch (e) {
+      print('Error updating movie status: $e');
+      throw 'Failed to update movie status';
+    }
+  }
+
+  Future<Map<String, int>> getUserMovieCounts(String userId) async {
+    try {
+      final moviesQuery = await _firestore
+          .collection('movies')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      int total = 0;
+      int completed = 0;
+      int inProgress = 0;
+
+      for (final doc in moviesQuery.docs) {
+        final status = doc.data()['status'] as String?;
+        total++;
+        
+        if (status == 'completed') {
+          completed++;
+        } else if (status == 'in_progress') {
+          inProgress++;
+        }
+      }
+
+      return {
+        'total': total,
+        'completed': completed,
+        'inProgress': inProgress,
+      };
+    } catch (e) {
+      print('Error getting user movie counts: $e');
+      throw 'Failed to get movie counts';
+    }
   }
 } 

@@ -11,6 +11,10 @@ import '../movie/movie_scenes_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../movie/movie_video_player_screen.dart';
 import '../profile/profile_screen.dart';
+import '../feed/feed_screen.dart';
+import '../find_movies/find_movies_screen.dart';
+import '../messaging/conversation_list_screen.dart';
+import '../training/director_training_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -275,7 +279,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('OHFtok'),
@@ -298,21 +302,55 @@ class _HomePageState extends State<HomePage> {
               child: IconButton(
                 key: _createVideoButtonKey,
                 onPressed: _isProcessing ? null : _showInstructions,
-                icon: Icon(_isListening ? Icons.mic : Icons.movie_creation),
+                icon: Icon(_isListening ? Icons.mic : Icons.add_to_queue),
                 color: _isListening ? Colors.red : null,
               ),
             ),
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () async {
-                final authService = Provider.of<AuthService>(context, listen: false);
-                await authService.signOut();
-                if (mounted) {
-                  Navigator.of(context).pushReplacementNamed('/login');
-                }
+              icon: const Icon(Icons.school),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const DirectorTrainingScreen(),
+                  ),
+                );
               },
+              tooltip: 'Training',
+            ),
+            IconButton(
+              icon: const Icon(Icons.message),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ConversationListScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Messages',
+            ),
+            IconButton(
+              icon: const Icon(Icons.rss_feed),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const FeedScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Social Feed',
+            ),
+            IconButton(
+              icon: const Icon(Icons.explore),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const FindMoviesScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Find Movies',
             ),
             IconButton(
               icon: const Icon(Icons.person),
@@ -323,21 +361,18 @@ class _HomePageState extends State<HomePage> {
                   ),
                 );
               },
+              tooltip: 'Profile',
             ),
           ],
           bottom: const TabBar(
             tabs: [
               Tab(
                 icon: Icon(Icons.movie),
-                text: 'My Movies',
+                text: 'Original Movies',
               ),
               Tab(
                 icon: Icon(Icons.fork_right),
                 text: 'mNp(s)',
-              ),
-              Tab(
-                icon: Icon(Icons.search),
-                text: 'Find Movies',
               ),
             ],
           ),
@@ -346,7 +381,6 @@ class _HomePageState extends State<HomePage> {
           children: [
             _buildMyMoviesTab(),
             _buildMyForksTab(),
-            _buildFindMoviesTab(),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/famous_directors.dart';
 import '../../../services/ai/scene_director_service.dart';
+import '../../../models/director.dart';
 
 class DirectorCutDialog extends StatefulWidget {
   final String sceneText;

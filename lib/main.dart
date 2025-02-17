@@ -10,6 +10,7 @@ import 'services/movie/movie_service.dart';
 import 'services/social/auth_service.dart';
 import 'services/user_service.dart';
 import 'services/social/achievement_service.dart';
+import 'services/messaging/messaging_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
@@ -54,6 +55,7 @@ void main() async {
         Provider<NotificationService>(create: (_) => NotificationService()),
         Provider<AchievementService>(create: (_) => AchievementService()),
         Provider<UserService>(create: (_) => UserService()),
+        Provider<MessagingService>(create: (_) => MessagingService()),
         ProxyProvider<AchievementService, AuthService>(
           create: null,
           update: (_, achievementService, __) => AuthService(

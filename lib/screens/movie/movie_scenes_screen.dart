@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/movie/movie_service.dart';
 import '../../services/movie/movie_video_service.dart';
 import '../video/movie_video_player_screen.dart';
+import '../training/director_training_screen.dart';
 import 'scene_generation_modal.dart';
 import 'video_generation_modal.dart';
 import 'dart:async';
@@ -1045,10 +1046,66 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                                         const SizedBox(height: 16),
                                       ],
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          if (scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty)
-                                            TextButton.icon(
+                                          if (scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty) ...[
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              margin: const EdgeInsets.only(right: 8),
+                                              decoration: BoxDecoration(
+                                                color: scene['videoType'] == 'ai' ? Colors.blue[100] : Colors.green[100],
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: scene['videoType'] == 'ai' ? Colors.blue : Colors.green,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    scene['videoType'] == 'ai' 
+                                                      ? Icons.auto_awesome 
+                                                      : Icons.videocam,
+                                                    size: 16,
+                                                    color: scene['videoType'] == 'ai' 
+                                                      ? Colors.blue[700]
+                                                      : Colors.green[700],
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    scene['videoType'] == 'ai' ? 'AI' : 'User',
+                                                    style: TextStyle(
+                                                      color: scene['videoType'] == 'ai' 
+                                                        ? Colors.blue[700]
+                                                        : Colors.green[700],
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                          if (!widget.isReadOnly)
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(Icons.video_library),
+                                                  tooltip: 'Add Video',
+                                                  onPressed: () => _showVideoOptionsMenu(context, scene),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.movie_creation),
+                                                  tooltip: 'Director\'s Cut',
+                                                  onPressed: () => _showDirectorCutDialog(context, scene),
+                                                ),
+                                              ],
+                                            ),
+                                          if (scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty) ...[
+                                            IconButton(
+                                              icon: const Icon(Icons.play_circle_outline),
+                                              tooltip: 'Watch Video',
                                               onPressed: () {
                                                 final scenesWithVideos = _scenes.where((scene) => 
                                                   scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty
@@ -1067,65 +1124,21 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                                                   ),
                                                 );
                                               },
-                                              icon: const Icon(Icons.play_circle_outline),
-                                              label: const Text('Watch Video'),
                                             ),
-                                          if (!widget.isReadOnly)
-                                            PopupMenuButton<String>(
-                                              icon: const Icon(Icons.video_library),
-                                              tooltip: 'Add Video',
-                                              itemBuilder: (context) => [
-                                                const PopupMenuItem(
-                                                  value: 'ai',
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.auto_awesome),
-                                                      SizedBox(width: 8),
-                                                      Text('Generate AI Video'),
-                                                    ],
+                                            IconButton(
+                                              icon: const Icon(Icons.school),
+                                              tooltip: 'Practice with Director',
+                                              onPressed: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) => DirectorTrainingScreen(
+                                                      initialVideoPath: scene['videoUrl'],
+                                                    ),
                                                   ),
-                                                ),
-                                                const PopupMenuItem(
-                                                  value: 'camera',
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.camera_alt),
-                                                      SizedBox(width: 8),
-                                                      Text('Record Video'),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const PopupMenuItem(
-                                                  value: 'gallery',
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.photo_library),
-                                                      SizedBox(width: 8),
-                                                      Text('Upload from Gallery'),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                              onSelected: (value) async {
-                                                switch (value) {
-                                                  case 'ai':
-                                                    await _generateVideo(context, scene);
-                                                    break;
-                                                  case 'camera':
-                                                    await _uploadVideo(context, scene, true);
-                                                    break;
-                                                  case 'gallery':
-                                                    await _uploadVideo(context, scene, false);
-                                                    break;
-                                                }
+                                                );
                                               },
                                             ),
-                                          if (!widget.isReadOnly)
-                                            TextButton.icon(
-                                              onPressed: () => _showDirectorCutDialog(context, scene),
-                                              icon: const Icon(Icons.movie_creation),
-                                              label: const Text('Director\'s Cut'),
-                                            ),
+                                          ],
                                         ],
                                       ),
                                     ],
@@ -1214,6 +1227,41 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  Future<void> _showVideoOptionsMenu(BuildContext context, Map<String, dynamic> scene) async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.auto_awesome),
+            title: const Text('Generate AI Video'),
+            onTap: () {
+              Navigator.pop(context);
+              _generateVideo(context, scene);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.camera_alt),
+            title: const Text('Record Video'),
+            onTap: () {
+              Navigator.pop(context);
+              _uploadVideo(context, scene, true);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library),
+            title: const Text('Upload from Gallery'),
+            onTap: () {
+              Navigator.pop(context);
+              _uploadVideo(context, scene, false);
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
 

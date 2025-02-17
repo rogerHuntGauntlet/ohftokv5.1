@@ -11,6 +11,8 @@ class User {
   Map<String, dynamic>? preferences;
   List<String> movieIds;
   int totalMoviesCreated;
+  List<String> following;
+  List<String> followers;
   
   User({
     required this.id,
@@ -23,10 +25,14 @@ class User {
     this.preferences,
     List<String>? movieIds,
     this.totalMoviesCreated = 0,
+    List<String>? following,
+    List<String>? followers,
   }) : 
     this.createdAt = createdAt ?? DateTime.now(),
     this.lastUpdated = lastUpdated ?? DateTime.now(),
-    this.movieIds = movieIds ?? [];
+    this.movieIds = movieIds ?? [],
+    this.following = following ?? [],
+    this.followers = followers ?? [];
 
   factory User.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -41,6 +47,8 @@ class User {
       preferences: data['preferences'],
       movieIds: List<String>.from(data['movieIds'] ?? []),
       totalMoviesCreated: data['totalMoviesCreated'] ?? 0,
+      following: List<String>.from(data['following'] ?? []),
+      followers: List<String>.from(data['followers'] ?? []),
     );
   }
 
@@ -55,6 +63,8 @@ class User {
       'preferences': preferences,
       'movieIds': movieIds,
       'totalMoviesCreated': totalMoviesCreated,
+      'following': following,
+      'followers': followers,
     };
   }
 
@@ -63,6 +73,10 @@ class User {
     String? photoUrl,
     String? bio,
     Map<String, dynamic>? preferences,
+    List<String>? following,
+    List<String>? followers,
+    List<String>? movieIds,
+    int? totalMoviesCreated,
   }) {
     return User(
       id: this.id,
@@ -73,8 +87,18 @@ class User {
       createdAt: this.createdAt,
       lastUpdated: DateTime.now(),
       preferences: preferences ?? this.preferences,
-      movieIds: this.movieIds,
-      totalMoviesCreated: this.totalMoviesCreated,
+      movieIds: movieIds ?? this.movieIds,
+      totalMoviesCreated: totalMoviesCreated ?? this.totalMoviesCreated,
+      following: following ?? this.following,
+      followers: followers ?? this.followers,
     );
   }
+
+  bool isFollowing(String userId) {
+    return following.contains(userId);
+  }
+
+  int get followingCount => following.length;
+  int get followersCount => followers.length;
+  int get movieCount => movieIds.length;
 } 

@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is required for recording training videos and scene attempts</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is required for recording audio in training videos</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is required for saving recorded videos</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
