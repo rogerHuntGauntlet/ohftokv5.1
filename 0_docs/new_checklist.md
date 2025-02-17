@@ -620,3 +620,59 @@ This document breaks down the new features and user stories into specific, actio
 6. Add voice-to-text features
 
 This detailed breakdown provides a comprehensive roadmap for implementing OHFtok v2's new features. Each section is being tackled iteratively, with regular testing and user feedback incorporated throughout the development process.
+
+## Do Not Work List (Live Calling Features)
+
+### Video Call Support
+- [ ] WebRTC integration
+- [ ] Camera controls
+- [ ] Audio controls
+- [ ] Quality settings
+- [ ] Call state management
+- [ ] Native incoming call UI
+
+### Live Engagement Features
+- [ ] Live Features
+  - [ ] Live comment stream
+  - [ ] Reaction system
+  - [ ] Live viewer count
+  - [ ] Moderation tools
+
+- [ ] Interactive Sessions
+  - [ ] Q&A interface
+  - [ ] Live polls
+  - [ ] Story prompt system
+  - [ ] Session scheduling
+
+### Sharing & Distribution
+- [ ] Stream Link Generation
+  - [ ] Unique URL generation system
+    - [ ] Implement URL shortening service
+    - [ ] Add QR code generation
+    - [ ] Create link preview metadata
+    - [ ] Set up link analytics tracking
+    - [ ] Add expirable/permanent link options
+  - [ ] Link Management
+    - [ ] Create link dashboard
+    - [ ] Add link status tracking
+    - [ ] Implement link access controls
+    - [ ] Add link statistics view
+
+## Recently Completed:
+1. ✅ Director Training Integration
+   - Added education hat icon to scene tiles
+   - Implemented direct video transfer to training
+   - Created seamless navigation between scenes and training
+   - Integrated director feedback system
+2. ✅ Live Engagement Core Features
+   - Complete data models for streams, comments, reactions, and viewers
+   - Real-time chat system with moderation
+   - Reaction system with counters and animations
+   - Viewer management with roles
+   - Stream controls and settings UI
+   - Clean and modern interface design
+   - Firebase integration for real-time updates
+3. ✅ Navigation Updates
+   - Added Training button to app bar
+   - Implemented placeholder for training feature
+   - Updated UI organization

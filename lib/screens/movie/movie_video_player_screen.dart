@@ -4,11 +4,15 @@ import 'package:chewie/chewie.dart';
 
 class MovieVideoPlayerScreen extends StatefulWidget {
   final List<Map<String, dynamic>> scenes;
+  final String movieId;
+  final String userId;
   final int initialIndex;
 
   const MovieVideoPlayerScreen({
     super.key,
     required this.scenes,
+    required this.movieId,
+    required this.userId,
     this.initialIndex = 0,
   });
 

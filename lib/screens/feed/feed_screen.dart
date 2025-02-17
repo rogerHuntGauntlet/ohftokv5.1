@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/feed_item.dart';
-import '../../models/activity.dart';
-import '../../services/social/feed_service.dart';
-import '../../services/social/activity_service.dart';
-import '../../services/social/auth_service.dart';
-import '../../services/movie/movie_service.dart';
-import 'widgets/feed_item_card.dart';
-import 'widgets/activity_filter_bar.dart';
-import '../movie/movie_video_player_screen.dart';
+import '../../services/feed/feed_service.dart';
+import '../../widgets/feed/feed_item_widget.dart';
+import 'create_post_screen.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({Key? key}) : super(key: key);
@@ -18,148 +11,126 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateMixin {
   final FeedService _feedService = FeedService();
-  final ActivityService _activityService = ActivityService();
   final ScrollController _scrollController = ScrollController();
-  DocumentSnapshot? _lastDocument;
+  late TabController _tabController;
+  
+  List<FeedItem> _feedItems = [];
+  String? _lastItemId;
   bool _isLoading = false;
-  List<Activity> _activities = [];
-  List<String> _selectedTypes = [];
+  bool _hasMore = true;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _scrollController.addListener(_onScroll);
-    _loadInitialFeed();
+    _loadFeed();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadInitialFeed() async {
-    final userId = context.read<AuthService>().currentUser?.uid;
-    if (userId == null) return;
-
-    if (_selectedTypes.isEmpty) {
-      // Load all activities
-      _activityService.getUserActivities(userId).listen((activities) {
-        if (mounted) {
-          setState(() {
-            _activities = activities;
-          });
-        }
-      });
-    } else {
-      // Load filtered activities
-      _activityService.getFilteredActivities(userId, _selectedTypes).listen((activities) {
-        if (mounted) {
-          setState(() {
-            _activities = activities;
-          });
-        }
-      });
-    }
-  }
-
-  Future<void> _loadMoreFeed() async {
-    if (_isLoading) return;
+  Future<void> _loadFeed() async {
+    if (_isLoading || !_hasMore) return;
 
     setState(() {
       _isLoading = true;
     });
 
-    final userId = context.read<AuthService>().currentUser?.uid;
-    if (userId == null) return;
-
     try {
-      final newActivities = await (_selectedTypes.isEmpty
-          ? _activityService.getUserActivities(userId, lastDocument: _lastDocument)
-          : _activityService.getFilteredActivities(userId, _selectedTypes, lastDocument: _lastDocument)
-      ).first;
+      final items = _tabController.index == 0
+          ? await _feedService.getFollowingFeed(lastItemId: _lastItemId)
+          : await _feedService.getFeedItems(lastItemId: _lastItemId);
 
-      if (mounted) {
-        setState(() {
-          _activities.addAll(newActivities);
-          if (newActivities.isNotEmpty) {
-            _lastDocument = newActivities.last as DocumentSnapshot;
-          }
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        if (items.isEmpty) {
+          _hasMore = false;
+        } else {
+          _feedItems.addAll(items);
+          _lastItemId = items.last.id;
+        }
+        _isLoading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading feed: ${e.toString()}')),
+      );
     }
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >=
+    if (_scrollController.position.pixels >= 
         _scrollController.position.maxScrollExtent - 200) {
-      _loadMoreFeed();
+      _loadFeed();
     }
   }
 
   Future<void> _onRefresh() async {
-    _lastDocument = null;
-    await _loadInitialFeed();
-  }
-
-  void _onFilterChanged(List<String> types) {
     setState(() {
-      _selectedTypes = types;
-      _lastDocument = null;
+      _feedItems.clear();
+      _lastItemId = null;
+      _hasMore = true;
     });
-    _loadInitialFeed();
+    await _loadFeed();
   }
 
-  void _onActivityTap(Activity activity) {
-    if (activity.movieId != null) {
-      final movieService = Provider.of<MovieService>(context, listen: false);
-      movieService.getMovie(activity.movieId!).then((movie) {
-        if (mounted) {
-          final scenesWithVideos = (movie['scenes'] as List<dynamic>)
-              .map((scene) => Map<String, dynamic>.from(scene))
-              .where((scene) => 
-                scene['videoUrl'] != null && 
-                scene['videoUrl'].toString().isNotEmpty
-              )
-              .toList();
-
-          if (scenesWithVideos.isNotEmpty) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MovieVideoPlayerScreen(
-                  scenes: scenesWithVideos,
-                  initialIndex: 0,
+  Future<void> _showCreatePost() async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      enableDrag: true,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 4),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('This movie has no viewable scenes yet.'),
+              const Expanded(
+                child: CreatePostScreen(),
               ),
-            );
-          }
-        }
-      }).catchError((error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error loading movie: $error'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      });
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // Post was created successfully, refresh the feed
+      _onRefresh();
     }
   }
 
@@ -168,73 +139,70 @@ class _FeedScreenState extends State<FeedScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Feed'),
-        elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          onTap: (index) {
+            setState(() {
+              _feedItems.clear();
+              _lastItemId = null;
+              _hasMore = true;
+            });
+            _loadFeed();
+          },
+          tabs: const [
+            Tab(text: 'Following'),
+            Tab(text: 'For You'),
+          ],
+        ),
       ),
-      body: Column(
-        children: [
-          ActivityFilterBar(
-            selectedTypes: _selectedTypes,
-            onFilterChanged: _onFilterChanged,
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _onRefresh,
-              child: _activities.isEmpty
-                  ? const Center(
-                      child: Text('No activities yet'),
-                    )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: _activities.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == _activities.length) {
-                          return _isLoading
-                              ? const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                )
-                              : const SizedBox.shrink();
-                        }
-
-                        final activity = _activities[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 8.0,
-                            vertical: 4.0,
-                          ),
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.person),
-                            ),
-                            title: Text(activity.getDescription()),
-                            subtitle: Text(
-                              _formatTimestamp(activity.timestamp),
-                            ),
-                            onTap: () => _onActivityTap(activity),
-                          ),
-                        );
-                      },
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: _feedItems.isEmpty && !_isLoading
+          ? const Center(
+              child: Text('No feed items to display'),
+            )
+          : ListView.builder(
+              controller: _scrollController,
+              itemCount: _feedItems.length + (_hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _feedItems.length) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(),
                     ),
+                  );
+                }
+                return FeedItemWidget(
+                  feedItem: _feedItems[index],
+                  onLikePressed: () async {
+                    try {
+                      await _feedService.toggleLike(_feedItems[index].id);
+                      // Refresh the feed item to update like status
+                      final items = await _feedService.getFeedItems(
+                        lastItemId: _feedItems[index].id,
+                        userId: _feedItems[index].userId,
+                      );
+                      if (items.isNotEmpty) {
+                        setState(() {
+                          _feedItems[index] = items.first;
+                        });
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString())),
+                      );
+                    }
+                  },
+                );
+              },
             ),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showCreatePost,
+        child: const Icon(Icons.add),
+        tooltip: 'Create Post',
       ),
     );
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final difference = DateTime.now().difference(timestamp);
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
   }
 } 
