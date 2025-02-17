@@ -11,6 +11,7 @@ import '../../../services/movie/movie_service.dart';
 import '../dialogs/director_cut_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'video_progress_tracker.dart';
 
 class SceneCard extends StatelessWidget {
   final Map<String, dynamic> scene;
@@ -18,21 +19,21 @@ class SceneCard extends StatelessWidget {
   final bool isReadOnly;
   final Function(Map<String, dynamic>) onEdit;
   final Function(Map<String, dynamic>) onDelete;
-  final Function(dynamic) onVideoSelected;
+  final Function(Map<String, dynamic>) onVideoSelected;
   final String? movieTitle;
   final String movieId;
 
   const SceneCard({
-    super.key,
+    Key? key,
     required this.scene,
+    required this.isReadOnly,
     required this.onEdit,
     required this.onDelete,
     required this.onVideoSelected,
-    required this.isReadOnly,
+    required this.isNewScene,
     required this.movieTitle,
     required this.movieId,
-    this.isNewScene = false,
-  });
+  }) : super(key: key);
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -49,189 +50,84 @@ class SceneCard extends StatelessWidget {
     }
   }
 
-  Future<void> _handleUploadVideo(BuildContext context, {bool fromCamera = false}) async {
-    final ImagePicker picker = ImagePicker();
-    final progressTracker = VideoProgressTracker(context);
+  Future<void> _handleVideoUpload(BuildContext context, bool fromCamera) async {
     final videoService = VideoCreationService();
-    
+    final progressTracker = VideoProgressTracker(context);
+
     try {
-      final XFile? video = await picker.pickVideo(
-        source: fromCamera ? ImageSource.camera : ImageSource.gallery,
-        maxDuration: const Duration(minutes: 5),
-      );
-
-      if (video == null) return; // User cancelled selection
-      if (!context.mounted) return;
+      progressTracker.show();
       
-      // Show upload progress
-      progressTracker.showProgress();
-
-      // Start the upload
       final result = await videoService.uploadVideo(
+        context: context,
         movieId: movieId,
         sceneId: scene['documentId'],
         fromCamera: fromCamera,
-        videoFile: video,
-        onProgress: (progress, status) {
-          progressTracker.updateProgress(progress, status);
+        onProgress: (progress) {
+          progressTracker.update(progress);
         },
       );
 
-      if (result != null && context.mounted) {
-        progressTracker.hideProgress();
-
-        // Show success dialog
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('Success!'),
-              ],
-            ),
-            content: const Text('Your Video is Ready!'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  final updatedScene = Map<String, dynamic>.from(scene);
-                  updatedScene['videoUrl'] = result['videoUrl'];
-                  updatedScene['videoId'] = result['videoId'];
-                  updatedScene['videoType'] = VideoCreationService.VIDEO_TYPE_USER;
-                  updatedScene['status'] = 'completed';
-                  onVideoSelected(updatedScene);
-                },
-                child: const Text('Done'),
-              ),
-            ],
-          ),
-        );
-      }
-    } on VideoOperationException catch (e) {
-      progressTracker.hideProgress();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-              textColor: Colors.white,
-            ),
-          ),
-        );
+      if (result != null) {
+        onEdit({
+          ...scene,
+          'videoUrl': result['videoUrl'],
+          'videoId': result['videoId'],
+          'videoType': VideoCreationService.VIDEO_TYPE_USER,
+        });
       }
     } catch (e) {
-      progressTracker.hideProgress();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An unexpected error occurred: $e'),
+            content: Text('Error uploading video: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      await progressTracker.close();
+      progressTracker.close();
     }
   }
 
-  Future<void> _handleVideoRemoval(BuildContext context) async {
+  Future<void> _handleVideoDelete(BuildContext context) async {
     final videoService = VideoCreationService();
     final progressTracker = VideoProgressTracker(context);
 
     try {
-      final shouldRemove = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.warning, color: Colors.orange),
-              SizedBox(width: 8),
-              Text('Remove Video'),
-            ],
-          ),
-          content: const Text(
-            'Are you sure you want to remove this video? This action cannot be undone.',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
-              child: const Text('Remove'),
-            ),
-          ],
-        ),
-      ) ?? false;
-
-      if (!shouldRemove) return;
-
-      progressTracker.showProgress();
-      progressTracker.updateProgress(0.3, 'Removing video...');
-
+      progressTracker.show();
+      
       await videoService.deleteVideo(
-        videoId: scene['videoId'],
-        movieId: movieId,
-        sceneId: scene['documentId'],
+        movieId,
+        scene['documentId'],
+        scene['videoId'],
       );
 
-      progressTracker.updateProgress(1.0, 'Video removed successfully');
-      await Future.delayed(const Duration(milliseconds: 500));
-      progressTracker.hideProgress();
+      onEdit({
+        ...scene,
+        'videoUrl': null,
+        'videoId': null,
+        'videoType': null,
+      });
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Video successfully removed'),
+            content: Text('Video deleted successfully'),
             backgroundColor: Colors.green,
-          ),
-        );
-
-        final updatedScene = Map<String, dynamic>.from(scene);
-        updatedScene['videoUrl'] = '';
-        updatedScene['videoId'] = '';
-        updatedScene['videoType'] = '';
-        updatedScene['status'] = 'pending';
-        updatedScene['action'] = 'remove_video';
-        onVideoSelected(updatedScene);
-      }
-    } on VideoOperationException catch (e) {
-      progressTracker.hideProgress();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-              textColor: Colors.white,
-            ),
           ),
         );
       }
     } catch (e) {
-      progressTracker.hideProgress();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An unexpected error occurred: $e'),
+            content: Text('Error deleting video: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      await progressTracker.close();
+      progressTracker.close();
     }
   }
 
@@ -406,6 +302,65 @@ class SceneCard extends StatelessWidget {
         ),
       );
     }
+  }
+
+  Widget _buildVideoSection(BuildContext context) {
+    if (scene['videoUrl'] == null || scene['videoUrl'].toString().isEmpty) {
+      return ElevatedButton.icon(
+        onPressed: isReadOnly ? null : () => onVideoSelected(scene),
+        icon: const Icon(Icons.video_call),
+        label: const Text('Add Video'),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: StreamBuilder<VideoGenerationProgress>(
+            stream: scene['videoType'] == VideoCreationService.VIDEO_TYPE_AI
+                ? VideoCreationService().generateAIVideo(
+                    sceneText: scene['text'],
+                    movieId: movieId,
+                    sceneId: scene['documentId'],
+                  )
+                : null,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                final progress = snapshot.data?.progress ?? 0.0;
+                final status = snapshot.data?.status ?? 'Initializing...';
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LinearProgressIndicator(value: progress),
+                    Text(status),
+                  ],
+                );
+              }
+              
+              return Row(
+                children: [
+                  Icon(
+                    scene['videoType'] == VideoCreationService.VIDEO_TYPE_AI
+                        ? Icons.auto_awesome
+                        : Icons.videocam,
+                    color: Colors.green,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Video Ready'),
+                ],
+              );
+            },
+          ),
+        ),
+        if (!isReadOnly)
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () => _handleVideoDelete(context),
+            tooltip: 'Delete Video',
+          ),
+      ],
+    );
   }
 
   @override
@@ -683,7 +638,6 @@ class SceneCard extends StatelessWidget {
                                   initialIndex: 0,
                                   movieId: movieId,
                                   userId: scene['userId'] ?? '',
-                                  movieTitle: movieTitle ?? 'Untitled Movie',
                                 ),
                               ),
                             );
@@ -743,16 +697,16 @@ class SceneCard extends StatelessWidget {
                           onSelected: (action) async {
                             switch (action) {
                               case 'remove':
-                                await _handleVideoRemoval(context);
+                                await _handleVideoDelete(context);
                                 break;
                               case 'generate_ai':
                                 await _handleAIVideoGeneration(context);
                                 break;
                               case 'upload':
-                                await _handleUploadVideo(context, fromCamera: false);
+                                await _handleVideoUpload(context, false);
                                 break;
                               case 'capture':
-                                await _handleUploadVideo(context, fromCamera: true);
+                                await _handleVideoUpload(context, true);
                                 break;
                             }
                           },

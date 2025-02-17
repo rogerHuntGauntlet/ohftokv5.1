@@ -8,12 +8,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../video/video_creation_service.dart';
+import '../../models/video_generation_progress.dart';
 
 class MovieVideoService {
   final ImagePicker _picker = ImagePicker();
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final VideoCreationService _videoService = VideoCreationService();
 
   /// Uploads a video for a scene, either from camera or gallery
   Future<Map<String, String>?> uploadVideoForScene({
@@ -21,174 +24,15 @@ class MovieVideoService {
     required String sceneId,
     required BuildContext context,
     required bool fromCamera,
-    void Function(double progress)? onProgress,
+    required Function(double) onProgress,
   }) async {
-    try {
-      print('Starting video upload process');
-
-      // Check authentication
-      User? currentUser = _auth.currentUser;
-      if (currentUser == null) {
-        print('User not authenticated');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please sign in to upload videos'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return null;
-      }
-
-      print('User authenticated: ${currentUser.uid}');
-
-      // Pick video from camera or gallery
-      final XFile? videoFile = await _picker.pickVideo(
-        source: fromCamera ? ImageSource.camera : ImageSource.gallery,
-        maxDuration: const Duration(minutes: 5),
-      );
-
-      if (videoFile == null) {
-        print('No video file selected or permission denied');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No video selected or permission denied'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return null;
-      }
-
-      print('Video file selected: ${videoFile.path}');
-
-      // Verify file exists and is readable
-      final file = File(videoFile.path);
-      if (!await file.exists()) {
-        print('Video file does not exist at path: ${videoFile.path}');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Selected video file not found'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return null;
-      }
-
-      // Get file size for progress calculation
-      final fileSize = await videoFile.length();
-      if (fileSize == 0) {
-        print('Video file is empty');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Selected video file is empty'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return null;
-      }
-      
-      // Create the storage reference with a unique timestamp
-      final storageRef = _storage.ref();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final videoRef = storageRef.child('${timestamp}.mp4');
-
-      print('Created storage reference: ${videoRef.fullPath}');
-
-      // Show upload progress
-      final progressDialog = _showUploadProgress(context);
-
-      // Start upload with progress tracking
-      final uploadTask = videoRef.putFile(
-        File(videoFile.path),
-        SettableMetadata(
-          contentType: 'video/mp4',
-          customMetadata: {
-            'videoId': videoRef.name,
-            'movieId': movieId,
-            'sceneId': sceneId,
-            'userId': currentUser.uid,
-            'uploadedAt': DateTime.now().toIso8601String(),
-            'sourceType': 'user',
-          },
-        ),
-      );
-
-      print('Upload task started');
-
-      // Track upload progress
-      uploadTask.snapshotEvents.listen(
-        (TaskSnapshot snapshot) {
-          if (onProgress != null) {
-            final progress = snapshot.bytesTransferred / fileSize;
-            onProgress(progress);
-          }
-          final progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          print('Upload progress: ${progress.toStringAsFixed(1)}%');
-          progressDialog.update(progress);
-        },
-        onError: (error) {
-          print('Upload error: $error');
-          progressDialog.close();
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Upload error: $error'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
-      );
-
-      // Wait for upload to complete
-      print('Waiting for upload to complete...');
-      final snapshot = await uploadTask;
-      print('Upload completed. Total bytes: ${snapshot.totalBytes}');
-
-      // Get download URL
-      final videoUrl = await videoRef.getDownloadURL();
-      final videoId = videoRef.name;
-      print('Download URL obtained: $videoUrl');
-
-      // Close progress dialog
-      progressDialog.close();
-
-      return {
-        'videoUrl': videoUrl,
-        'videoId': videoId,
-      };
-    } catch (e, stackTrace) {
-      print('Error in uploadVideoForScene: $e');
-      print('Stack trace: $stackTrace');
-      
-      // Close progress dialog if it's open
-      if (context.mounted) {
-        Navigator.of(context).pop();
-      }
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error uploading video: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return null;
-    }
-  }
-
-  _ProgressDialog _showUploadProgress(BuildContext context) {
-    final dialog = _ProgressDialog(context: context);
-    dialog.show();
-    return dialog;
+    return await _videoService.uploadVideo(
+      context: context,
+      movieId: movieId,
+      sceneId: sceneId,
+      fromCamera: fromCamera,
+      onProgress: onProgress,
+    );
   }
 
   /// Starts a video generation with Replicate
@@ -299,6 +143,24 @@ class MovieVideoService {
       print('Error processing and uploading video: $e');
       throw 'Failed to process and upload video';
     }
+  }
+
+  Future<void> deleteVideo(String movieId, String sceneId, String videoId) async {
+    await _videoService.deleteVideo(movieId, sceneId, videoId);
+  }
+
+  Future<Map<String, String>> generateVideo({
+    required String sceneText,
+    required String movieId,
+    required String sceneId,
+    required Function(VideoGenerationProgress) onProgress,
+  }) async {
+    return await _videoService.generateVideo(
+      sceneText: sceneText,
+      movieId: movieId,
+      sceneId: sceneId,
+      onProgress: onProgress,
+    );
   }
 }
 
