@@ -26,13 +26,108 @@ class MovieVideoService {
     required bool fromCamera,
     required Function(double) onProgress,
   }) async {
-    return await _videoService.uploadVideo(
-      context: context,
-      movieId: movieId,
-      sceneId: sceneId,
-      fromCamera: fromCamera,
-      onProgress: onProgress,
-    );
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw 'User not authenticated';
+
+      // Pick video file
+      final XFile? videoFile = await _picker.pickVideo(
+        source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+        maxDuration: const Duration(minutes: 5),
+      );
+
+      if (videoFile == null) {
+        return null; // User cancelled selection
+      }
+
+      // Create storage reference
+      final storageRef = _storage
+          .ref()
+          .child('movies')
+          .child(movieId)
+          .child('scenes')
+          .child('$sceneId.mp4');
+
+      // Upload video file with retry logic
+      UploadTask? uploadTask;
+      int retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          uploadTask = storageRef.putFile(
+            File(videoFile.path),
+            SettableMetadata(
+              contentType: 'video/mp4',
+              customMetadata: {
+                'movieId': movieId,
+                'sceneId': sceneId,
+                'userId': user.uid,
+                'uploadedAt': DateTime.now().toIso8601String(),
+                'sourceType': 'user',
+              },
+            ),
+          );
+
+          // Monitor upload progress
+          uploadTask.snapshotEvents.listen(
+            (TaskSnapshot snapshot) {
+              final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+              onProgress(progress);
+            },
+            onError: (error) {
+              print('Upload error: $error');
+              if (retryCount < maxRetries - 1) {
+                retryCount++;
+              } else {
+                throw error;
+              }
+            },
+          );
+
+          // Wait for upload to complete
+          await uploadTask.whenComplete(() => null);
+          
+          // If we get here, upload was successful
+          break;
+        } catch (e) {
+          print('Upload attempt $retryCount failed: $e');
+          if (retryCount >= maxRetries - 1) {
+            throw 'Failed to upload after $maxRetries attempts';
+          }
+          retryCount++;
+          await Future.delayed(Duration(seconds: retryCount * 2)); // Exponential backoff
+        } finally {
+          uploadTask = null;
+        }
+      }
+
+      // Get download URL
+      final videoUrl = await storageRef.getDownloadURL();
+      final videoId = storageRef.name;
+
+      // Update the scene in Firestore
+      await _firestore
+          .collection('movies')
+          .doc(movieId)
+          .collection('scenes')
+          .doc(sceneId)
+          .update({
+        'videoUrl': videoUrl,
+        'videoId': videoId,
+        'videoType': 'user',
+        'status': 'completed',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      return {
+        'videoUrl': videoUrl,
+        'videoId': videoId,
+      };
+    } catch (e) {
+      print('Error in uploadVideoForScene: $e');
+      throw 'Failed to upload video: $e';
+    }
   }
 
   /// Starts a video generation with Replicate
@@ -155,12 +250,121 @@ class MovieVideoService {
     required String sceneId,
     required Function(VideoGenerationProgress) onProgress,
   }) async {
-    return await _videoService.generateVideo(
-      sceneText: sceneText,
-      movieId: movieId,
-      sceneId: sceneId,
-      onProgress: onProgress,
-    );
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw 'User not authenticated';
+
+      // Start generation
+      onProgress(VideoGenerationProgress(
+        percentage: 0.1,
+        stage: 'Starting video generation...',
+        progress: 0.1,
+        status: 'Initializing',
+      ));
+
+      // Start Replicate generation
+      final predictionId = await startReplicateGeneration(sceneText);
+      
+      onProgress(VideoGenerationProgress(
+        percentage: 0.2,
+        stage: 'Processing your scene...',
+        progress: 0.2,
+        status: 'Generating frames',
+      ));
+
+      // Poll for completion
+      bool isComplete = false;
+      String? videoUrl;
+      String? error;
+      int attempts = 0;
+      const maxAttempts = 60; // 1 minute with 1-second delays
+
+      while (!isComplete && attempts < maxAttempts) {
+        attempts++;
+        final status = await checkReplicateStatus(predictionId);
+        
+        switch (status['status']) {
+          case 'succeeded':
+            isComplete = true;
+            videoUrl = status['output'];
+            break;
+          case 'failed':
+            isComplete = true;
+            error = status['error'] ?? 'Generation failed';
+            break;
+          case 'processing':
+            // Update progress based on attempt count
+            final progress = 0.2 + (attempts / maxAttempts * 0.6); // 20% to 80%
+            onProgress(VideoGenerationProgress(
+              percentage: progress,
+              stage: 'Generating your video...',
+              progress: progress,
+              status: 'Frame ${attempts} of $maxAttempts',
+            ));
+            await Future.delayed(const Duration(seconds: 1));
+            break;
+          default:
+            await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+
+      if (error != null) {
+        throw error;
+      }
+
+      if (videoUrl == null) {
+        throw 'Video generation timed out';
+      }
+
+      onProgress(VideoGenerationProgress(
+        percentage: 0.8,
+        stage: 'Processing generated video...',
+        progress: 0.8,
+        status: 'Downloading and uploading',
+      ));
+
+      // Process and upload the video
+      final result = await processAndUploadVideo(
+        videoUrl,
+        movieId,
+        sceneId,
+        predictionId,
+      );
+
+      onProgress(VideoGenerationProgress(
+        percentage: 0.9,
+        stage: 'Finalizing...',
+        progress: 0.9,
+        status: 'Updating scene',
+      ));
+
+      // Update the scene in Firestore
+      await _firestore
+          .collection('movies')
+          .doc(movieId)
+          .collection('scenes')
+          .doc(sceneId)
+          .update({
+        'videoUrl': result['videoUrl'],
+        'videoId': result['videoId'],
+        'videoType': 'ai',
+        'status': 'completed',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'generationId': predictionId,
+      });
+
+      onProgress(VideoGenerationProgress(
+        percentage: 1.0,
+        stage: 'Complete!',
+        progress: 1.0,
+        status: 'Video ready',
+      ));
+
+      return result;
+    } catch (e) {
+      print('Error generating video: $e');
+      throw 'Failed to generate video: $e';
+    }
   }
 }
 

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 class VideoUploadModal extends StatelessWidget {
   final Stream<double> progressStream;
+  final VoidCallback? onCancel;
 
   const VideoUploadModal({
     super.key,
     required this.progressStream,
+    this.onCancel,
   });
 
   @override
@@ -39,12 +41,18 @@ class VideoUploadModal extends StatelessWidget {
                 ),
               ],
             ),
-            actions: snapshot.data == 1.0 ? [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ] : null,
+            actions: [
+              if (snapshot.data != 1.0 && onCancel != null)
+                TextButton(
+                  onPressed: onCancel,
+                  child: const Text('Cancel'),
+                ),
+              if (snapshot.data == 1.0)
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+            ],
           );
         },
       ),

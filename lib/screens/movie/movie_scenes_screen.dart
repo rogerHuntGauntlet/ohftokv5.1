@@ -17,6 +17,7 @@ import 'dialogs/director_cut_dialog.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'video_options_menu.dart';
+import '../../widgets/scene_card.dart';
 
 class MovieScenesScreen extends StatefulWidget {
   final String movieIdea;
@@ -46,13 +47,15 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
   bool _isListening = false;
   String _continuationIdea = '';
   final TextEditingController _confirmDeleteController = TextEditingController();
+  late final MovieService _movieService;
 
   @override
   void initState() {
     super.initState();
     _currentTitle = widget.movieTitle;
-    _scenes = List<Map<String, dynamic>>.from(widget.scenes);
+    _scenes = [];
     _speechService.initialize();
+    _movieService = Provider.of<MovieService>(context, listen: false);
   }
 
   @override
@@ -69,14 +72,30 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
     setState(() => _scenes = updatedScenes);
   }
 
+  void _updateSceneInList(Map<String, dynamic> updatedScene) {
+    setState(() {
+      final index = _scenes.indexWhere((s) => s['documentId'] == updatedScene['documentId']);
+      if (index != -1) {
+        _scenes[index] = updatedScene;
+      }
+    });
+  }
+
   Future<void> _uploadVideo(BuildContext context, Map<String, dynamic> scene, bool fromCamera) async {
     final progressController = StreamController<double>();
+    bool hasError = false;
 
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => VideoUploadModal(progressStream: progressController.stream),
+        builder: (context) => VideoUploadModal(
+          progressStream: progressController.stream,
+          onCancel: () {
+            progressController.close();
+            Navigator.of(context).pop();
+          },
+        ),
       );
 
       await _videoService.uploadVideo(
@@ -89,25 +108,26 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
           }
         },
         onComplete: (result) {
-          setState(() {
-            final index = _scenes.indexWhere((s) => s['documentId'] == scene['documentId']);
-            if (index != -1) {
-              _scenes[index] = {
-                ..._scenes[index],
-                'status': 'completed',
-                'videoUrl': result['videoUrl'],
-                'videoId': result['videoId'],
-                'videoType': 'user',
-              };
-            }
-          });
+          if (!mounted) return;
+          
+          final updatedScene = {
+            ...scene,
+            'status': 'completed',
+            'videoUrl': result['videoUrl'],
+            'videoId': result['videoId'],
+            'videoType': 'user',
+          };
+          
+          _updateSceneInList(updatedScene);
 
           if (!progressController.isClosed) {
             progressController.add(1.0);
           }
         },
         onError: (error) {
-          if (context.mounted) {
+          hasError = true;
+          if (mounted) {
+            Navigator.of(context).pop();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error uploading video: $error'),
@@ -118,18 +138,34 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
         },
       );
 
-      await Future.delayed(const Duration(seconds: 1));
+      if (!hasError) {
+        await Future.delayed(const Duration(seconds: 1));
 
-      if (context.mounted) {
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Video uploaded successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Upload error: $e');
+      if (mounted && !hasError) {
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Video uploaded successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text('Error uploading video: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      await progressController.close();
+      if (!progressController.isClosed) {
+        await progressController.close();
+      }
     }
   }
 
@@ -276,8 +312,7 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                           );
 
                           try {
-                            final movieService = Provider.of<MovieService>(context, listen: false);
-                            final newScenes = await movieService.generateAdditionalScene(
+                            final newScenes = await _movieService.generateAdditionalScene(
                               movieId: widget.movieId,
                               existingScenes: _scenes,
                               continuationIdea: _continuationIdea,
@@ -352,8 +387,7 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
       builder: (context) => DeleteConfirmationModal(
         onConfirm: () async {
           try {
-            final movieService = Provider.of<MovieService>(context, listen: false);
-            await movieService.deleteMovie(widget.movieId);
+            await _movieService.deleteMovie(widget.movieId);
             
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -382,92 +416,95 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Your Movie Scenes'),
+        title: Text(widget.movieTitle ?? 'Movie Scenes'),
         actions: [
-          if (!widget.isReadOnly)
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () => _showDeleteConfirmationDialog(),
-              tooltip: 'Delete Movie',
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TitleSection(
-                  currentTitle: _currentTitle,
-                  movieId: widget.movieId,
-                  isReadOnly: widget.isReadOnly,
-                  onTitleChanged: _handleTitleChanged,
-                ),
-                IdeaSection(movieIdea: widget.movieIdea),
-                ScenesList(
-                  scenes: _scenes,
-                  movieId: widget.movieId,
-                  movieTitle: _currentTitle,
-                  isReadOnly: widget.isReadOnly,
-                  onScenesUpdated: _handleScenesUpdated,
-                  onVideoSelected: (scene) => _showVideoOptionsMenu(context, scene),
-                ),
-                const SizedBox(height: 24),
-                if (!widget.isReadOnly)
-                  Center(
-                    child: ElevatedButton.icon(
-                      onPressed: _showAddScenesDialog,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        backgroundColor: Colors.blue,
-                      ),
-                      icon: const Icon(Icons.add),
-                      label: const Text(
-                        'Add New Scene',
-                        style: TextStyle(fontSize: 16),
-                      ),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _movieService.getMovieScenes(widget.movieId),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.shrink();
+              
+              final scenes = snapshot.data!;
+              final needsVideoCount = scenes.where((s) => s['needsVideo'] == true).length;
+              
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Center(
+                  child: Text(
+                    'Needs Video: $needsVideoCount/${scenes.length}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16.0),
-        child: ElevatedButton.icon(
-          onPressed: () {
-            final scenesWithVideos = _scenes.where((scene) => 
-              scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty
-            ).toList();
-            
-            if (scenesWithVideos.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('No videos available yet. Add some videos to your scenes first.'),
                 ),
               );
-              return;
-            }
-            
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => MovieVideoPlayerScreen(
-                  scenes: scenesWithVideos,
-                  movieId: widget.movieId,
-                  userId: scenesWithVideos.first['userId'] ?? '',
-                ),
-              ),
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            },
           ),
-          icon: const Icon(Icons.movie),
-          label: const Text('Watch Full Movie'),
-        ),
+          if (!widget.isReadOnly) ...[
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _showAddScenesDialog,
+              tooltip: 'Add Scene',
+            ),
+            IconButton(
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => MovieVideoPlayerScreen(
+                      scenes: _scenes,
+                      movieId: widget.movieId,
+                      userId: _movieService.getCurrentUserId(),
+                    ),
+                  ),
+                );
+              },
+              tooltip: 'Preview Movie',
+            ),
+          ],
+        ],
+      ),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _movieService.getMovieScenes(widget.movieId),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final scenes = snapshot.data!;
+          print('Displaying ${scenes.length} scenes. Scenes with videos: ${scenes.where((s) => !s['needsVideo']).length}');
+
+          return ReorderableListView.builder(
+            itemCount: scenes.length,
+            onReorder: (oldIndex, newIndex) {
+              // ... existing reorder code ...
+            },
+            itemBuilder: (context, index) {
+              final scene = scenes[index];
+              return SceneCard(
+                key: ValueKey(scene['documentId']),
+                scene: scene,
+                movieId: widget.movieId,
+                onVideoUploaded: () {
+                  // Scene will be automatically updated through the stream
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Video uploaded successfully')),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          // ... existing add scene code ...
+        },
+        child: const Icon(Icons.add),
       ),
     );
   }

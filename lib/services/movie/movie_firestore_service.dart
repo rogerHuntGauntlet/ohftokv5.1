@@ -93,15 +93,30 @@ class MovieFirestoreService {
     required Map<String, dynamic> sceneData,
   }) async {
     try {
-      await _firestore
+      final batch = _firestore.batch();
+      
+      // Update the scene
+      final sceneRef = _firestore
           .collection('movies')
           .doc(movieId)
           .collection('scenes')
-          .doc(sceneId)
-          .update({
+          .doc(sceneId);
+          
+      batch.update(sceneRef, {
         ...sceneData,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // If this scene has a video, update the movie status
+      if (sceneData['videoUrl'] != null) {
+        final movieRef = _firestore.collection('movies').doc(movieId);
+        batch.update(movieRef, {
+          'status': 'complete',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
     } catch (e) {
       print('Error updating scene: $e');
       throw 'Failed to update scene. Please try again.';
@@ -126,10 +141,14 @@ class MovieFirestoreService {
             // Client-side filter to ensure we only get non-fork movies
             if (movieData['type'] == 'fork') continue;
 
-            final scenesSnapshot = await doc.reference
+            // Create a stream for the scenes collection
+            final scenesStream = doc.reference
                 .collection('scenes')
                 .orderBy('id')
-                .get();
+                .snapshots();
+
+            // Wait for the first value from the stream
+            final scenesSnapshot = await scenesStream.first;
             
             final scenes = scenesSnapshot.docs
                 .map((sceneDoc) => {
@@ -167,10 +186,14 @@ class MovieFirestoreService {
             // Client-side filter to ensure we only get fork movies
             if (movieData['type'] != 'fork') continue;
 
-            final scenesSnapshot = await doc.reference
+            // Create a stream for the scenes collection
+            final scenesStream = doc.reference
                 .collection('scenes')
                 .orderBy('id')
-                .get();
+                .snapshots();
+
+            // Wait for the first value from the stream
+            final scenesSnapshot = await scenesStream.first;
             
             final scenes = scenesSnapshot.docs
                 .map((sceneDoc) => {
@@ -188,6 +211,30 @@ class MovieFirestoreService {
           
           return movies;
         });
+  }
+
+  /// Gets a stream of a single movie's scenes
+  Stream<List<Map<String, dynamic>>> getMovieScenes(String movieId) {
+    return _firestore
+        .collection('movies')
+        .doc(movieId)
+        .collection('scenes')
+        .orderBy('id')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) {
+              final data = doc.data();
+              return {
+                ...data,
+                'documentId': doc.id,
+                'videoUrl': data['videoUrl'],
+                'videoId': data['videoId'],
+                'videoType': data['videoType'],
+                'status': data['status'] ?? 'pending',
+                'needsVideo': data['videoUrl'] == null || data['videoUrl'].toString().isEmpty,
+              };
+            })
+            .toList());
   }
 
   /// Updates a movie's title
@@ -266,23 +313,24 @@ class MovieFirestoreService {
           
           for (final doc in snapshot.docs) {
             final movieData = doc.data();
-            final scenesSnapshot = await doc.reference
+            
+            // Create a stream for the scenes collection
+            final scenesStream = doc.reference
                 .collection('scenes')
                 .orderBy('id')
-                .get();
+                .snapshots();
+
+            // Wait for the first value from the stream
+            final scenesSnapshot = await scenesStream.first;
             
             final scenes = scenesSnapshot.docs
                 .map((sceneDoc) => {
                       ...sceneDoc.data(),
                       'documentId': sceneDoc.id,
                     })
-                .where((scene) => 
-                    scene['status'] == 'completed' && 
-                    scene['videoUrl'] != null && 
-                    scene['videoUrl'].toString().isNotEmpty
-                )
                 .toList();
 
+            // Only add movies that have at least one scene
             if (scenes.isNotEmpty) {
               movies.add({
                 ...movieData,

@@ -16,8 +16,61 @@ class MovieService {
   final FirebaseFunctions _functions;
   final MovieFirestoreService _firestoreService = MovieFirestoreService();
   final OpenAIService _openAIService = OpenAIService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   
   MovieService() : _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+
+  /// Gets the current user's ID
+  String getCurrentUserId() {
+    final user = _auth.currentUser;
+    if (user == null) throw 'User not authenticated';
+    return user.uid;
+  }
+
+  /// Gets a stream of scenes for a specific movie
+  Stream<List<Map<String, dynamic>>> getMovieScenes(String movieId) {
+    return FirebaseFirestore.instance
+        .collection('movies')
+        .doc(movieId)
+        .collection('scenes')
+        .orderBy('id')
+        .snapshots()
+        .map((snapshot) {
+          final scenes = snapshot.docs.map((doc) {
+            final data = doc.data();
+            // Ensure video fields are properly included
+            return {
+              ...data,
+              'documentId': doc.id,
+              'videoUrl': data['videoUrl'],
+              'videoId': data['videoId'],
+              'videoType': data['videoType'],
+              'status': data['status'] ?? 'pending',
+              'needsVideo': data['videoUrl'] == null || data['videoUrl'].toString().isEmpty,
+            };
+          }).toList();
+          
+          print('Loaded ${scenes.length} scenes with video data: ${scenes.map((s) => '${s['id']}: ${s['videoUrl'] != null}')}');
+          return scenes;
+        });
+  }
+
+  /// Process scene data with proper video fields
+  Map<String, dynamic> _processSceneData(Map<String, dynamic> scene, {String? movieId}) {
+    return {
+      'id': scene['id'] ?? 0,
+      'title': scene['title']?.toString() ?? 'Scene ${scene['id'] ?? 0}',
+      'text': scene['text']?.toString().trim() ?? '',
+      'duration': scene['duration'] ?? 15,
+      'type': scene['type']?.toString() ?? 'scene',
+      'status': scene['status']?.toString() ?? 'pending',
+      'videoUrl': scene['videoUrl'],
+      'videoId': scene['videoId'],
+      'videoType': scene['videoType'],
+      'needsVideo': scene['videoUrl'] == null || scene['videoUrl'].toString().isEmpty,
+      if (movieId != null) 'movieId': movieId,
+    };
+  }
 
   /// Generates movie scenes using AI
   Future<List<Map<String, dynamic>>> generateMovieScenes(String movieIdea) async {
@@ -44,27 +97,19 @@ class MovieService {
         body: json.encode({
           'movieIdea': movieIdea,
           'userId': user.uid,
-          'movieId': movieId, // Pass the movieId to the cloud function
+          'movieId': movieId,
         }),
       );
 
-      print('Response status code: ${response.statusCode}');
-      print('Response body: ${response.body}');
-
       if (response.statusCode != 200) {
         print('Error from cloud function: ${response.body}');
-        // Delete the movie if scene generation failed
         await _firestoreService.deleteMovie(movieId);
         throw 'Failed to generate scenes. Server returned ${response.statusCode}';
       }
 
       final data = json.decode(response.body);
-      print('Decoded response data: $data');
-      
       if (data == null || !data.containsKey('scenes')) {
         print('No data received from function or missing scenes key');
-        print('Received data structure: $data');
-        // Delete the movie if no scenes were generated
         await _firestoreService.deleteMovie(movieId);
         throw 'No scenes generated';
       }
@@ -75,16 +120,7 @@ class MovieService {
       
       final scenes = rawScenes.map((scene) {
         print('Processing scene: $scene');
-        // Ensure all required fields have non-null values and include movieId
-        final processedScene = {
-          'id': scene['id'] ?? 0,
-          'title': scene['title']?.toString() ?? 'Scene ${scene['id'] ?? 0}',
-          'text': scene['text']?.toString() ?? '',
-          'duration': scene['duration'] ?? 15,
-          'type': scene['type']?.toString() ?? 'scene',
-          'status': scene['status']?.toString() ?? 'pending',
-          'movieId': movieId, // Add movieId to each scene
-        };
+        final processedScene = _processSceneData(scene, movieId: movieId);
         print('Processed scene: $processedScene');
         return processedScene;
       }).toList();

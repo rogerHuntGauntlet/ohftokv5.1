@@ -12,6 +12,9 @@ import '../dialogs/director_cut_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'video_progress_tracker.dart';
+import '../../../services/movie/movie_video_service.dart';
+import '../modals/video_generation_modal.dart';
+import '../modals/video_upload_modal.dart';
 
 class SceneCard extends StatelessWidget {
   final Map<String, dynamic> scene;
@@ -304,63 +307,223 @@ class SceneCard extends StatelessWidget {
     }
   }
 
+  Widget _buildVideoPlayer(BuildContext context) {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
+        children: [
+          if (scene['videoUrl'] != null)
+            Center(
+              child: IconButton(
+                icon: const Icon(Icons.play_circle_outline, size: 48),
+                color: Colors.white,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => MovieVideoPlayerScreen(
+                        scenes: [scene],
+                        initialIndex: 0,
+                        movieId: movieId,
+                        userId: scene['userId'] ?? '',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVideoSection(BuildContext context) {
-    if (scene['videoUrl'] == null || scene['videoUrl'].toString().isEmpty) {
-      return ElevatedButton.icon(
-        onPressed: isReadOnly ? null : () => onVideoSelected(scene),
-        icon: const Icon(Icons.video_call),
-        label: const Text('Add Video'),
-      );
+    if (scene['videoUrl'] != null) {
+      return _buildVideoPlayer(context);
     }
 
-    return Row(
-      children: [
-        Expanded(
-          child: StreamBuilder<VideoGenerationProgress>(
-            stream: scene['videoType'] == VideoCreationService.VIDEO_TYPE_AI
-                ? VideoCreationService().generateAIVideo(
-                    sceneText: scene['text'],
-                    movieId: movieId,
-                    sceneId: scene['documentId'],
-                  )
-                : null,
-            builder: (context, snapshot) {
-              if (snapshot.hasData) {
-                final progress = snapshot.data?.progress ?? 0.0;
-                final status = snapshot.data?.status ?? 'Initializing...';
-                
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LinearProgressIndicator(value: progress),
-                    Text(status),
-                  ],
-                );
-              }
-              
-              return Row(
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (scene['status'] == 'generating')
+              Column(
                 children: [
-                  Icon(
-                    scene['videoType'] == VideoCreationService.VIDEO_TYPE_AI
-                        ? Icons.auto_awesome
-                        : Icons.videocam,
-                    color: Colors.green,
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Generating video...',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  const Text('Video Ready'),
                 ],
-              );
-            },
-          ),
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.videocam),
+                    onPressed: () => _showVideoSourceDialog(context),
+                    tooltip: 'Record video',
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome),
+                    onPressed: () => _generateVideo(context),
+                    tooltip: 'Generate AI video',
+                    color: Colors.purple,
+                  ),
+                ],
+              ),
+          ],
         ),
-        if (!isReadOnly)
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () => _handleVideoDelete(context),
-            tooltip: 'Delete Video',
-          ),
-      ],
+      ),
     );
+  }
+
+  Future<void> _generateVideo(BuildContext context) async {
+    final movieService = MovieVideoService();
+    final progressController = StreamController<VideoGenerationProgress>();
+
+    try {
+      // Show the generation modal
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => VideoGenerationModal(
+          sceneText: scene['text'],
+          movieId: movieId,
+          sceneId: scene['documentId'],
+          progressStream: progressController.stream,
+          onVideoReady: (videoUrl, videoId) {
+            // Video is ready, close the modal
+            Navigator.of(context).pop();
+          },
+        ),
+      );
+
+      // Start the generation
+      await movieService.generateVideo(
+        sceneText: scene['text'],
+        movieId: movieId,
+        sceneId: scene['documentId'],
+        onProgress: (progress) {
+          progressController.add(progress);
+        },
+      );
+
+      // Close the modal if it's still open
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+    } catch (e) {
+      // Show error dialog
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Generation Failed'),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      await progressController.close();
+    }
+  }
+
+  Future<void> _showVideoSourceDialog(BuildContext context) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose Video Source'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera),
+              title: const Text('Camera'),
+              onTap: () => Navigator.of(context).pop('camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.of(context).pop('gallery'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null) return;
+
+    if (!context.mounted) return;
+
+    final movieService = MovieVideoService();
+    final progressController = StreamController<double>();
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => VideoUploadModal(
+          progressStream: progressController.stream,
+        ),
+      );
+
+      await movieService.uploadVideoForScene(
+        movieId: movieId,
+        sceneId: scene['documentId'],
+        context: context,
+        fromCamera: result == 'camera',
+        onProgress: (progress) {
+          progressController.add(progress);
+        },
+      );
+
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Upload Failed'),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      await progressController.close();
+    }
   }
 
   @override
@@ -372,12 +535,12 @@ class SceneCard extends StatelessWidget {
         color: Colors.red,
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24.0),
-        child: Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
+              children: [
                 Icon(
                   Icons.delete,
                   color: Colors.white,
@@ -393,7 +556,7 @@ class SceneCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
           ],
         ),
       ),
@@ -402,8 +565,8 @@ class SceneCard extends StatelessWidget {
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Row(
-                children: const [
+              title: const Row(
+                children: [
                   Icon(Icons.warning, color: Colors.red),
                   SizedBox(width: 8),
                   Text('Delete Scene'),
@@ -539,178 +702,11 @@ class SceneCard extends StatelessWidget {
                     style: const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 16),
-                  if (scene['directorNotes'] != null && scene['directorNotes'].toString().isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.movie_filter, color: Colors.blue, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Director\'s Vision (${scene['directorName']})',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Reimagined Scene:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            scene['text'],
-                            style: TextStyle(
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Director\'s Notes:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            scene['directorNotes'],
-                            style: TextStyle(
-                              color: Colors.grey[800],
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (scene['videoType'] == 'ai')
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.auto_awesome, color: Colors.blue[700]),
-                          const SizedBox(width: 8),
-                          Text(
-                            'AI Generated Video',
-                            style: TextStyle(
-                              color: Colors.blue[700],
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  _buildVideoSection(context),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      if (scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty)
-                        TextButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => MovieVideoPlayerScreen(
-                                  scenes: [scene],
-                                  initialIndex: 0,
-                                  movieId: movieId,
-                                  userId: scene['userId'] ?? '',
-                                ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.play_circle_outline),
-                          label: const Text('Watch Video'),
-                        ),
-                      if (!isReadOnly)
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.video_library),
-                          tooltip: 'Add Video',
-                          itemBuilder: (context) => [
-                            if (scene['status'] != 'pending') ...[
-                              const PopupMenuItem(
-                                value: 'remove',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text('Remove Video', style: TextStyle(color: Colors.red)),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuDivider(),
-                            ],
-                            const PopupMenuItem(
-                              value: 'generate_ai',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.auto_awesome),
-                                  SizedBox(width: 8),
-                                  Text('Generate AI Video'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'upload',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.upload_file),
-                                  SizedBox(width: 8),
-                                  Text('Upload Video'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'capture',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.videocam),
-                                  SizedBox(width: 8),
-                                  Text('Capture Video'),
-                                ],
-                              ),
-                            ),
-                          ],
-                          onSelected: (action) async {
-                            switch (action) {
-                              case 'remove':
-                                await _handleVideoDelete(context);
-                                break;
-                              case 'generate_ai':
-                                await _handleAIVideoGeneration(context);
-                                break;
-                              case 'upload':
-                                await _handleVideoUpload(context, false);
-                                break;
-                              case 'capture':
-                                await _handleVideoUpload(context, true);
-                                break;
-                            }
-                          },
-                        ),
                       if (!isReadOnly)
                         TextButton.icon(
                           onPressed: () => _handleDirectorCut(context),

@@ -115,15 +115,15 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onVerticalDragEnd: (details) {
-          if (details.primaryVelocity! < 0 && _currentIndex > 0) {
-            // Swipe up to previous video
-            _pageController.previousPage(
+          if (details.primaryVelocity! < 0 && _currentIndex < scenesWithVideos.length - 1) {
+            // Swipe up to next video
+            _pageController.nextPage(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
             );
-          } else if (details.primaryVelocity! > 0 && _currentIndex < scenesWithVideos.length - 1) {
-            // Swipe down to next video
-            _pageController.nextPage(
+          } else if (details.primaryVelocity! > 0 && _currentIndex > 0) {
+            // Swipe down to previous video
+            _pageController.previousPage(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
             );

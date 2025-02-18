@@ -10,6 +10,8 @@ import 'tabs/movies_tab.dart';
 import 'tabs/forks_tab.dart';
 import 'utils/speech_helper.dart';
 import 'widgets/create_movie_button.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -25,6 +27,8 @@ class _HomePageState extends State<HomePage> {
   String _movieIdea = '';
   bool _isProcessing = false;
   StateSetter? _dialogSetState;
+  int _tapCount = 0;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -180,20 +184,34 @@ class _HomePageState extends State<HomePage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('OHFtok'),
-          leading: CreateMovieButton(
-            onTap: () {
-              if (_isListening) {
-                _stopListening();
-              } else {
-                _startListening();
+          leading: GestureDetector(
+            onTapDown: (_) {
+              print('Tap detected');
+              _tapCount++;
+              
+              _timer?.cancel();
+              _timer = Timer(const Duration(milliseconds: 500), () {
+                if (_tapCount == 1) {
+                  _showInstructions();
+                }
+                _tapCount = 0;
+              });
+
+              if (_tapCount == 2) {
+                _timer?.cancel();
+                _tapCount = 0;
+                if (!_isProcessing && _speechHelper.isInitialized) {
+                  _startListening();
+                }
               }
             },
-            onInstructionsTap: _showInstructions,
-            isListening: _isListening,
-            isProcessing: _isProcessing,
-            isSpeechInitialized: _speechHelper.isInitialized,
-            buttonKey: _createVideoButtonKey,
-            getTargetPosition: _getCreateButtonPosition,
+            child: Container(
+              alignment: Alignment.center,
+              child: Icon(
+                _isListening ? Icons.mic : Icons.add_to_queue,
+                color: _isListening ? Colors.red : null,
+              ),
+            ),
           ),
           actions: [
             IconButton(
