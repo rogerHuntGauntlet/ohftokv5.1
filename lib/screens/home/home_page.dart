@@ -5,6 +5,7 @@ import '../feed/feed_screen.dart';
 import '../find_movies/find_movies_screen.dart';
 import '../messaging/conversation_list_screen.dart';
 import '../training/director_training_screen.dart';
+import '../ohftok/ohftok_screen.dart';
 import 'dialogs/recording_dialog.dart';
 import 'tabs/movies_tab.dart';
 import 'tabs/forks_tab.dart';
@@ -183,7 +184,6 @@ class _HomePageState extends State<HomePage> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('OHFtok'),
           leading: GestureDetector(
             onTapDown: (_) {
               print('Tap detected');
@@ -214,6 +214,17 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.video_library),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const OhftokScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Ohftok',
+            ),
             IconButton(
               icon: const Icon(Icons.school),
               onPressed: () {
