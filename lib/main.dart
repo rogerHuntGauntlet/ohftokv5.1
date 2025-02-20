@@ -16,6 +16,7 @@ import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/home/home_page.dart';
+import 'screens/ohftok/ohftok_screen.dart';
 import 'screens/auth/auth_wrapper.dart';
 import 'config/routes.dart';
 import 'package:media_kit/media_kit.dart';
@@ -116,7 +117,7 @@ class AuthWrapper extends StatelessWidget {
               }
 
               if (onboardingSnapshot.data == true) {
-                return const HomePage();
+                return const OhftokScreen();
               } else {
                 return const OnboardingScreen();
               }

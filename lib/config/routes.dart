@@ -5,6 +5,7 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/home/home_page.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/ohftok/ohftok_screen.dart';
 
 class Routes {
   static const String initial = '/';
@@ -18,6 +19,7 @@ class Routes {
   static const String following = '/following';
   static const String notifications = '/notifications';
   static const String analytics = '/analytics';
+  static const String ohftok = '/ohftok';
 
   static final Map<String, Widget Function(BuildContext)> routes = {
     login: (context) => const LoginScreen(),
@@ -26,6 +28,7 @@ class Routes {
     onboarding: (context) => const OnboardingScreen(),
     home: (context) => const HomePage(),
     profile: (context) => const ProfileScreen(),
+    ohftok: (context) => const OhftokScreen(),
     // TODO: Add routes for new features as they are implemented
   };
 } 
