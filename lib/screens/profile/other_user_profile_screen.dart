@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../models/user.dart';
 import '../../services/user_service.dart';
 import '../../services/movie/movie_firestore_service.dart';
+import '../chat/chat_screen.dart';
 
 class OtherUserProfileScreen extends StatefulWidget {
   final String userId;
@@ -199,23 +201,57 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: () => _toggleFollow(user, isFollowing),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isFollowing ? Colors.grey : Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: () => _toggleFollow(user, isFollowing),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isFollowing ? Colors.grey : Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: Text(
+                isFollowing ? 'Unfollow' : 'Follow',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-          ),
-          child: Text(
-            isFollowing ? 'Unfollow' : 'Follow',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: () {
+                final currentUser = auth.FirebaseAuth.instance.currentUser;
+                if (currentUser == null) return;
+                
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatScreen(
+                      conversationId: '${user.id}_${currentUser.uid}',
+                      otherUserId: user.id,
+                      otherUserName: user.displayName,
+                      isGroup: false,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.message),
+              label: const Text('Message'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );

@@ -6,6 +6,10 @@ import '../../models/user.dart' as app_models;
 import 'package:provider/provider.dart';
 import '../movie/movie_scenes_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../profile/other_user_profile_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../chat/chat_screen.dart';
+import '../chat/movie_chat_screen.dart';
 
 class MovieVideoPlayerScreen extends StatefulWidget {
   final List<Map<String, dynamic>> scenes;
@@ -551,9 +555,33 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
                                                   'DM Director',
                                                   style: TextStyle(color: Colors.white),
                                                 ),
-                                                onTap: () {
+                                                onTap: () async {
                                                   Navigator.pop(context);
-                                                  // TODO: Implement DM functionality
+                                                  final directorId = scene['userId'] ?? widget.userId;
+                                                  final currentUser = FirebaseAuth.instance.currentUser;
+                                                  if (currentUser == null) return;
+
+                                                  // Get director's name
+                                                  final directorDoc = await FirebaseFirestore.instance
+                                                      .collection('users')
+                                                      .doc(directorId)
+                                                      .get();
+                                                  
+                                                  if (!context.mounted) return;
+                                                  
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) => ChatScreen(
+                                                        conversationId: '${directorId}_${currentUser.uid}',
+                                                        otherUserId: directorId,
+                                                        otherUserName: directorDoc.exists 
+                                                            ? directorDoc.get('displayName') ?? 'Director'
+                                                            : 'Director',
+                                                        isGroup: false,
+                                                      ),
+                                                    ),
+                                                  );
                                                 },
                                               ),
                                               ListTile(
@@ -562,9 +590,28 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
                                                   'Movie Chat',
                                                   style: TextStyle(color: Colors.white),
                                                 ),
-                                                onTap: () {
+                                                onTap: () async {
                                                   Navigator.pop(context);
-                                                  // TODO: Implement Movie Chat functionality
+                                                  
+                                                  // Get movie title
+                                                  final movieDoc = await FirebaseFirestore.instance
+                                                      .collection('movies')
+                                                      .doc(widget.movieId)
+                                                      .get();
+                                                  
+                                                  if (!context.mounted) return;
+                                                  
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) => MovieChatScreen(
+                                                        movieId: widget.movieId,
+                                                        movieTitle: movieDoc.exists 
+                                                            ? movieDoc.get('title') ?? 'Movie Chat'
+                                                            : 'Movie Chat',
+                                                      ),
+                                                    ),
+                                                  );
                                                 },
                                               ),
                                               ListTile(
@@ -575,7 +622,14 @@ class _MovieVideoPlayerScreenState extends State<MovieVideoPlayerScreen> {
                                                 ),
                                                 onTap: () {
                                                   Navigator.pop(context);
-                                                  // TODO: Navigate to profile
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) => OtherUserProfileScreen(
+                                                        userId: scene['userId'] ?? widget.userId,
+                                                      ),
+                                                    ),
+                                                  );
                                                 },
                                               ),
                                             ],

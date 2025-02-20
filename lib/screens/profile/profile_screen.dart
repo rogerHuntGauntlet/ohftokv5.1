@@ -23,8 +23,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   late Future<User?> _userFuture;
   late Future<Map<String, dynamic>> _statsFuture;
-  late Stream<List<Map<String, dynamic>>> _moviesStream;
-  final _movieService = MovieFirestoreService();
   final _auth = auth.FirebaseAuth.instance;
   bool _isEditing = false;
   final _formKey = GlobalKey<FormState>();
@@ -48,7 +46,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
     );
     _animationController.forward();
-    _moviesStream = _movieService.getUserMovies();
   }
 
   void _loadUserData() {
@@ -138,8 +135,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 const SizedBox(height: 16),
                                 _buildBioSection(user.bio!),
                               ],
-                              const SizedBox(height: 24),
-                              _buildMoviesSection(),
                               const SizedBox(height: 24),
                               _buildDangerZone(),
                             ],
@@ -420,241 +415,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         ],
       ),
     );
-  }
-
-  Widget _buildMoviesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.movie_creation,
-              color: Colors.white,
-              size: 24,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Your Movies',
-              style: GoogleFonts.righteous(
-                fontSize: 24,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildMoviesList(),
-      ],
-    );
-  }
-
-  Widget _buildMoviesList() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _moviesStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Error loading movies: ${snapshot.error}',
-              style: const TextStyle(color: Colors.white70),
-            ),
-          );
-        }
-
-        final movies = snapshot.data ?? [];
-        if (movies.isEmpty) {
-          return Center(
-            child: Text(
-              'No movies yet',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: Colors.white70,
-              ),
-            ),
-          );
-        }
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1.5,
-                ),
-              ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: movies.length,
-                itemBuilder: (context, index) {
-                  final movie = movies[index];
-                  return _buildMovieItem(movie);
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMovieItem(Map<String, dynamic> movie) {
-    final status = movie['status'] as String;
-    final createdAt = movie['createdAt'] is Timestamp 
-        ? (movie['createdAt'] as Timestamp).toDate()
-        : movie['createdAt'] as DateTime;
-    final scenes = List<Map<String, dynamic>>.from(movie['scenes'] ?? []);
-    final isPublic = movie['isPublic'] as bool? ?? false;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: Colors.white.withOpacity(0.1),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                movie['title'] ?? 'Untitled Movie',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            if (isPublic)
-              const Icon(
-                Icons.public,
-                color: Colors.white70,
-                size: 16,
-              ),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              movie['movieIdea'] ?? '',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.white70,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _buildStatusChip(status),
-                const SizedBox(width: 8),
-                Text(
-                  '${scenes.length} scenes',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _formatDate(createdAt),
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => MovieScenesScreen(
-                movieIdea: movie['movieIdea'],
-                scenes: scenes,
-                movieId: movie['documentId'],
-                movieTitle: movie['title'],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String status) {
-    Color color;
-    String label;
-
-    switch (status) {
-      case 'completed':
-        color = Colors.green;
-        label = 'Completed';
-        break;
-      case 'in_progress':
-        color = Colors.orange;
-        label = 'In Progress';
-        break;
-      default:
-        color = Colors.grey;
-        label = 'Draft';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.5),
-          width: 1,
-        ),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.poppins(
-          fontSize: 12,
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays > 365) {
-      return '${(difference.inDays / 365).floor()}y ago';
-    } else if (difference.inDays > 30) {
-      return '${(difference.inDays / 30).floor()}mo ago';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
   }
 
   Widget _buildDangerZone() {
