@@ -73,13 +73,16 @@ class VideoCreationService {
         throw VideoOperationException('No video selected');
       }
 
-      // Create storage reference
+      // Generate a unique filename using timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = '$timestamp.mp4';
+
+      // Create storage reference in userUploads folder
       final storageRef = _storage
           .ref()
-          .child('movies')
-          .child(movieId)
-          .child('scenes')
-          .child('$sceneId.mp4');
+          .child('userUploads')
+          .child(user.uid)
+          .child(filename);
 
       // Upload video file with retry logic
       UploadTask? uploadTask;
@@ -90,7 +93,14 @@ class VideoCreationService {
         try {
           uploadTask = storageRef.putFile(
             File(videoFile.path),
-            SettableMetadata(contentType: 'video/mp4'),
+            SettableMetadata(
+              contentType: 'video/mp4',
+              customMetadata: {
+                'uploadedAt': DateTime.now().toIso8601String(),
+                'userId': user.uid,
+                'originalName': videoFile.name,
+              },
+            ),
           );
 
           // Monitor upload progress

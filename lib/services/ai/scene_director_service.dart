@@ -45,13 +45,13 @@ class SceneDirectorService {
 
     try {
       final chatCompletion = await OpenAI.instance.chat.create(
-        model: 'gpt-4',
+        model: 'gpt-4',  // Changed back to GPT-4 for better JSON handling
         messages: [
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.system,
             content: [
               OpenAIChatCompletionChoiceMessageContentItemModel.text(
-                'You are an expert in formatting responses as valid JSON. Always ensure your responses can be parsed as JSON.',
+                'You are an expert film director. Format your responses as valid JSON with "reimaginedScene" and "directorNotes" fields.',
               ),
             ],
           ),
@@ -65,6 +65,12 @@ class SceneDirectorService {
           ),
         ],
         temperature: 0.7,
+        maxTokens: 1500,  // Increased token limit for more detailed responses
+      ).timeout(
+        const Duration(seconds: 45),  // Increased timeout for GPT-4
+        onTimeout: () {
+          throw Exception('Request timed out. Please try again.');
+        },
       );
 
       if (chatCompletion.choices.isEmpty) {
@@ -82,7 +88,6 @@ class SceneDirectorService {
       }
 
       try {
-        // Try to parse as JSON first
         final jsonResponse = json.decode(messageContent.text!) as Map<String, dynamic>;
         return SceneReconception(
           sceneDescription: jsonResponse['reimaginedScene'] as String? ?? '',
@@ -90,10 +95,14 @@ class SceneDirectorService {
           directorName: directorName,
         );
       } catch (e) {
-        // Fallback to text parsing if JSON fails
-        return _parseResponse(messageContent.text!, directorName);
+        print('JSON parsing error: $e');
+        print('Raw response: ${messageContent.text}');
+        throw Exception('Failed to parse director\'s response. Please try again.');
       }
     } catch (e) {
+      if (e.toString().contains('timed out')) {
+        throw Exception('The request took too long. Please try again.');
+      }
       throw Exception('Failed to get director\'s vision: $e');
     }
   }

@@ -46,30 +46,12 @@ class MovieService {
               'videoId': data['videoId'],
               'videoType': data['videoType'],
               'status': data['status'] ?? 'pending',
-              'needsVideo': data['videoUrl'] == null || data['videoUrl'].toString().isEmpty,
             };
           }).toList();
           
           print('Loaded ${scenes.length} scenes with video data: ${scenes.map((s) => '${s['id']}: ${s['videoUrl'] != null}')}');
           return scenes;
         });
-  }
-
-  /// Process scene data with proper video fields
-  Map<String, dynamic> _processSceneData(Map<String, dynamic> scene, {String? movieId}) {
-    return {
-      'id': scene['id'] ?? 0,
-      'title': scene['title']?.toString() ?? 'Scene ${scene['id'] ?? 0}',
-      'text': scene['text']?.toString().trim() ?? '',
-      'duration': scene['duration'] ?? 15,
-      'type': scene['type']?.toString() ?? 'scene',
-      'status': scene['status']?.toString() ?? 'pending',
-      'videoUrl': scene['videoUrl'],
-      'videoId': scene['videoId'],
-      'videoType': scene['videoType'],
-      'needsVideo': scene['videoUrl'] == null || scene['videoUrl'].toString().isEmpty,
-      if (movieId != null) 'movieId': movieId,
-    };
   }
 
   /// Generates movie scenes using AI
@@ -97,19 +79,27 @@ class MovieService {
         body: json.encode({
           'movieIdea': movieIdea,
           'userId': user.uid,
-          'movieId': movieId,
+          'movieId': movieId, // Pass the movieId to the cloud function
         }),
       );
 
+      print('Response status code: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
       if (response.statusCode != 200) {
         print('Error from cloud function: ${response.body}');
+        // Delete the movie if scene generation failed
         await _firestoreService.deleteMovie(movieId);
         throw 'Failed to generate scenes. Server returned ${response.statusCode}';
       }
 
       final data = json.decode(response.body);
+      print('Decoded response data: $data');
+      
       if (data == null || !data.containsKey('scenes')) {
         print('No data received from function or missing scenes key');
+        print('Received data structure: $data');
+        // Delete the movie if no scenes were generated
         await _firestoreService.deleteMovie(movieId);
         throw 'No scenes generated';
       }
@@ -120,7 +110,16 @@ class MovieService {
       
       final scenes = rawScenes.map((scene) {
         print('Processing scene: $scene');
-        final processedScene = _processSceneData(scene, movieId: movieId);
+        // Ensure all required fields have non-null values and include movieId
+        final processedScene = {
+          'id': scene['id'] ?? 0,
+          'title': scene['title']?.toString() ?? 'Scene ${scene['id'] ?? 0}',
+          'text': scene['text']?.toString() ?? '',
+          'duration': scene['duration'] ?? 15,
+          'type': scene['type']?.toString() ?? 'scene',
+          'status': scene['status']?.toString() ?? 'pending',
+          'movieId': movieId, // Add movieId to each scene
+        };
         print('Processed scene: $processedScene');
         return processedScene;
       }).toList();

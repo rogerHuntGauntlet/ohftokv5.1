@@ -19,8 +19,28 @@ class VideoOptionsMenu extends StatelessWidget {
           leading: const Icon(Icons.auto_awesome),
           title: const Text('Generate AI Video'),
           onTap: () {
-            Navigator.pop(context);
-            onGenerateAI();
+            // Show confirmation dialog first
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Generate AI Video'),
+                content: const Text('Are you sure you want to generate an AI video for this scene? This action cannot be undone.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context); // Close dialog
+                      Navigator.pop(context); // Close bottom sheet
+                      onGenerateAI();
+                    },
+                    child: const Text('Generate'),
+                  ),
+                ],
+              ),
+            );
           },
         ),
         ListTile(

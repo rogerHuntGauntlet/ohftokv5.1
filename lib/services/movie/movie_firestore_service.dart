@@ -222,18 +222,10 @@ class MovieFirestoreService {
         .orderBy('id')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) {
-              final data = doc.data();
-              return {
-                ...data,
-                'documentId': doc.id,
-                'videoUrl': data['videoUrl'],
-                'videoId': data['videoId'],
-                'videoType': data['videoType'],
-                'status': data['status'] ?? 'pending',
-                'needsVideo': data['videoUrl'] == null || data['videoUrl'].toString().isEmpty,
-              };
-            })
+            .map((doc) => {
+                  ...doc.data(),
+                  'documentId': doc.id,
+                })
             .toList());
   }
 

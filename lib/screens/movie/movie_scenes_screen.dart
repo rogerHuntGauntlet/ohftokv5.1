@@ -17,7 +17,6 @@ import 'dialogs/director_cut_dialog.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'video_options_menu.dart';
-import '../../widgets/scene_card.dart';
 
 class MovieScenesScreen extends StatefulWidget {
   final String movieIdea;
@@ -48,12 +47,13 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
   String _continuationIdea = '';
   final TextEditingController _confirmDeleteController = TextEditingController();
   late final MovieService _movieService;
+  bool _ignoreNextFirestoreUpdate = false;
 
   @override
   void initState() {
     super.initState();
     _currentTitle = widget.movieTitle;
-    _scenes = [];
+    _scenes = List<Map<String, dynamic>>.from(widget.scenes);
     _speechService.initialize();
     _movieService = Provider.of<MovieService>(context, listen: false);
   }
@@ -68,17 +68,82 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
     setState(() => _currentTitle = newTitle);
   }
 
-  void _handleScenesUpdated(List<Map<String, dynamic>> updatedScenes) {
-    setState(() => _scenes = updatedScenes);
+  Future<void> _handleScenesUpdated(List<Map<String, dynamic>> updatedScenes) async {
+    // Set flag to ignore the next Firestore update since we're about to make one
+    _ignoreNextFirestoreUpdate = true;
+    
+    // Find deleted scenes by comparing with current scenes
+    final deletedScenes = _scenes.where((oldScene) => 
+      !updatedScenes.any((newScene) => newScene['documentId'] == oldScene['documentId'])
+    ).toList();
+
+    // Update local state immediately
+    setState(() {
+      _scenes = List<Map<String, dynamic>>.from(updatedScenes);
+    });
+
+    // Update Firestore
+    try {
+      // Delete removed scenes from Firestore
+      for (var deletedScene in deletedScenes) {
+        if (deletedScene['documentId'] != null) {
+          await _movieService.deleteScene(widget.movieId, deletedScene['documentId']);
+        }
+      }
+
+      // Update remaining scenes
+      for (var scene in updatedScenes) {
+        if (scene['documentId'] != null) {
+          await _movieService.updateScene(
+            movieId: widget.movieId,
+            sceneId: scene['documentId'],
+            sceneData: Map<String, dynamic>.from(scene),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error updating scenes in Firestore: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving changes: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _updateSceneInList(Map<String, dynamic> updatedScene) {
+  Future<void> _updateSceneInList(Map<String, dynamic> updatedScene) async {
+    // Set flag to ignore the next Firestore update since we're about to make one
+    _ignoreNextFirestoreUpdate = true;
+
+    // Update local state immediately
     setState(() {
       final index = _scenes.indexWhere((s) => s['documentId'] == updatedScene['documentId']);
       if (index != -1) {
-        _scenes[index] = updatedScene;
+        _scenes[index] = Map<String, dynamic>.from(updatedScene);
       }
     });
+
+    // Update Firestore
+    try {
+      if (updatedScene['documentId'] != null) {
+        await _movieService.updateScene(
+          movieId: widget.movieId,
+          sceneId: updatedScene['documentId'],
+          sceneData: Map<String, dynamic>.from(updatedScene),
+        );
+      }
+    } catch (e) {
+      print('Error updating scene in Firestore: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving changes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _uploadVideo(BuildContext context, Map<String, dynamic> scene, bool fromCamera) async {
@@ -416,30 +481,8 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.movieTitle ?? 'Movie Scenes'),
+        title: Text(_currentTitle ?? 'Movie Scenes'),
         actions: [
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _movieService.getMovieScenes(widget.movieId),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
-              
-              final scenes = snapshot.data!;
-              final needsVideoCount = scenes.where((s) => s['needsVideo'] == true).length;
-              
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Center(
-                  child: Text(
-                    'Needs Video: $needsVideoCount/${scenes.length}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
           if (!widget.isReadOnly) ...[
             IconButton(
               icon: const Icon(Icons.add),
@@ -468,43 +511,100 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
         stream: _movieService.getMovieScenes(widget.movieId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(
+              child: Text(
+                'Error loading scenes: ${snapshot.error}',
+                style: TextStyle(color: Colors.red[400]),
+              ),
+            );
           }
 
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
-          final scenes = snapshot.data!;
-          print('Displaying ${scenes.length} scenes. Scenes with videos: ${scenes.where((s) => !s['needsVideo']).length}');
+          // If we just made a local update, ignore this Firestore update
+          if (_ignoreNextFirestoreUpdate) {
+            _ignoreNextFirestoreUpdate = false;
+          } else {
+            // Only update from Firestore if we haven't just made a local change
+            final firestoreScenes = snapshot.data!;
+            if (mounted) {
+              // Deep compare scenes to check for actual changes
+              bool hasChanges = _scenes.length != firestoreScenes.length;
+              if (!hasChanges) {
+                for (int i = 0; i < _scenes.length; i++) {
+                  if (_scenes[i]['documentId'] != firestoreScenes[i]['documentId'] ||
+                      _scenes[i]['hasDirectorCut'] != firestoreScenes[i]['hasDirectorCut'] ||
+                      _scenes[i]['text'] != firestoreScenes[i]['text']) {
+                    hasChanges = true;
+                    break;
+                  }
+                }
+              }
+              if (hasChanges) {
+                _scenes = List<Map<String, dynamic>>.from(firestoreScenes);
+              }
+            }
+          }
 
-          return ReorderableListView.builder(
-            itemCount: scenes.length,
-            onReorder: (oldIndex, newIndex) {
-              // ... existing reorder code ...
-            },
-            itemBuilder: (context, index) {
-              final scene = scenes[index];
-              return SceneCard(
-                key: ValueKey(scene['documentId']),
-                scene: scene,
-                movieId: widget.movieId,
-                onVideoUploaded: () {
-                  // Scene will be automatically updated through the stream
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Video uploaded successfully')),
-                  );
-                },
-              );
-            },
+          return SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TitleSection(
+                    currentTitle: _currentTitle,
+                    movieId: widget.movieId,
+                    isReadOnly: widget.isReadOnly,
+                    onTitleChanged: _handleTitleChanged,
+                  ),
+                  const SizedBox(height: 16),
+                  IdeaSection(
+                    movieIdea: widget.movieIdea,
+                  ),
+                  const SizedBox(height: 24),
+                  ScenesList(
+                    scenes: _scenes,
+                    movieId: widget.movieId,
+                    movieTitle: _currentTitle,
+                    isReadOnly: widget.isReadOnly,
+                    onScenesUpdated: _handleScenesUpdated,
+                    onVideoSelected: (scene) {
+                      _showVideoOptionsMenu(context, scene);
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  // Add Watch Movie button
+                  if (_scenes.any((scene) => scene['videoUrl'] != null && scene['videoUrl'].toString().isNotEmpty))
+                    Center(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => MovieVideoPlayerScreen(
+                                scenes: _scenes,
+                                movieId: widget.movieId,
+                                userId: _movieService.getCurrentUserId(),
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.play_circle_filled),
+                        label: const Text('Watch Full Movie'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          // ... existing add scene code ...
-        },
-        child: const Icon(Icons.add),
       ),
     );
   }

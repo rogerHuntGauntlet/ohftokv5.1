@@ -15,6 +15,7 @@ import 'video_progress_tracker.dart';
 import '../../../services/movie/movie_video_service.dart';
 import '../modals/video_generation_modal.dart';
 import '../modals/video_upload_modal.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class SceneCard extends StatelessWidget {
   final Map<String, dynamic> scene;
@@ -283,27 +284,65 @@ class SceneCard extends StatelessWidget {
   }
 
   Future<void> _handleDirectorCut(BuildContext context) async {
-    final result = await showDialog<SceneReconception>(
+    SceneReconception? result;
+    await showDialog<void>(
       context: context,
       builder: (context) => DirectorCutDialog(
         sceneText: scene['text'],
         onDirectorCutSelected: (directorCut) {
-          final updatedScene = Map<String, dynamic>.from(scene);
-          updatedScene['originalText'] = scene['text'];
-          updatedScene['text'] = directorCut.sceneDescription;
-          updatedScene['directorNotes'] = directorCut.directorNotes;
-          onEdit(updatedScene);
+          result = directorCut;
+          Navigator.of(context).pop();
         },
       ),
     );
 
     if (result != null && context.mounted) {
+      // Update the scene with the director's cut info
+      final updatedScene = Map<String, dynamic>.from(scene);
+      updatedScene['originalText'] = scene['text'];
+      updatedScene['text'] = result!.sceneDescription;
+      updatedScene['directorNotes'] = result!.directorNotes;
+      updatedScene['directorName'] = result!.directorName;
+      updatedScene['hasDirectorCut'] = true;
+      onEdit(updatedScene);
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Director\'s cut applied successfully!'),
           backgroundColor: Colors.green,
         ),
       );
+    }
+  }
+
+  Future<void> _removeVideoFromScene(BuildContext context) async {
+    try {
+      // Just update the scene to remove video references
+      onEdit({
+        ...scene,
+        'videoUrl': null,
+        'videoId': null,
+        'videoType': null,
+        'status': 'pending',
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Video removed from scene'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing video: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -316,7 +355,7 @@ class SceneCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (scene['videoUrl'] != null)
+          if (scene['videoUrl'] != null) ...[
             Center(
               child: IconButton(
                 icon: const Icon(Icons.play_circle_outline, size: 48),
@@ -335,6 +374,42 @@ class SceneCard extends StatelessWidget {
                 },
               ),
             ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.delete),
+                color: Colors.white,
+                onPressed: () async {
+                  final bool? confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Remove Video'),
+                      content: const Text('Are you sure you want to remove this video from the scene? The video will still be available in storage.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Remove'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true) {
+                    await _removeVideoFromScene(context);
+                  }
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -381,8 +456,38 @@ class SceneCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   IconButton(
+                    icon: const Icon(Icons.folder),
+                    onPressed: () => _showPreviousVideosModal(context),
+                    tooltip: 'Previous videos',
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
                     icon: const Icon(Icons.auto_awesome),
-                    onPressed: () => _generateVideo(context),
+                    onPressed: () async {
+                      // Show confirmation dialog first
+                      final bool? confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Generate AI Video'),
+                          content: const Text('Are you sure you want to generate an AI video for this scene? This action cannot be undone.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Generate'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirmed == true) {
+                        _generateVideo(context);
+                      }
+                    },
                     tooltip: 'Generate AI video',
                     color: Colors.purple,
                   ),
@@ -452,6 +557,111 @@ class SceneCard extends StatelessWidget {
     }
   }
 
+  Future<void> _showPreviousVideosModal(BuildContext context) async {
+    final userId = Provider.of<MovieService>(context, listen: false).getCurrentUserId();
+    
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Existing Video'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: FutureBuilder<ListResult>(
+            future: FirebaseStorage.instance
+                .ref()
+                .child('userUploads')
+                .child(userId)
+                .list(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Center(child: Text('Error loading videos'));
+              }
+
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final videos = snapshot.data!.items;
+              
+              if (videos.isEmpty) {
+                return const Center(child: Text('No videos available'));
+              }
+
+              return GridView.builder(
+                shrinkWrap: true,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 16/9,
+                ),
+                itemCount: videos.length,
+                itemBuilder: (context, index) {
+                  final video = videos[index];
+                  
+                  return FutureBuilder<String>(
+                    future: video.getDownloadURL(),
+                    builder: (context, urlSnapshot) {
+                      return InkWell(
+                        onTap: urlSnapshot.hasData ? () {
+                          // Update the scene with the selected video
+                          onEdit({
+                            ...scene,
+                            'videoUrl': urlSnapshot.data,
+                            'videoId': video.name,
+                            'videoType': 'user',
+                            'status': 'completed',
+                          });
+                          Navigator.pop(context);
+                          
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Video added to scene'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } : null,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[900],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (!urlSnapshot.hasData)
+                                const Center(child: CircularProgressIndicator())
+                              else
+                                Center(
+                                  child: Icon(
+                                    Icons.play_circle_outline,
+                                    color: Colors.white.withOpacity(0.7),
+                                    size: 32,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showVideoSourceDialog(BuildContext context) async {
     final result = await showDialog<String>(
       context: context,
@@ -470,6 +680,11 @@ class SceneCard extends StatelessWidget {
               title: const Text('Gallery'),
               onTap: () => Navigator.of(context).pop('gallery'),
             ),
+            ListTile(
+              leading: const Icon(Icons.video_library),
+              title: const Text('Previous Videos'),
+              onTap: () => Navigator.of(context).pop('previous'),
+            ),
           ],
         ),
       ),
@@ -478,6 +693,11 @@ class SceneCard extends StatelessWidget {
     if (result == null) return;
 
     if (!context.mounted) return;
+
+    if (result == 'previous') {
+      await _showPreviousVideosModal(context);
+      return;
+    }
 
     final movieService = MovieVideoService();
     final progressController = StreamController<double>();
@@ -556,7 +776,6 @@ class SceneCard extends StatelessWidget {
                 ),
               ],
             ),
-            SizedBox(width: 16),
           ],
         ),
       ),
@@ -630,11 +849,37 @@ class SceneCard extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-          subtitle: Text(
-            scene['text'],
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.grey[600]),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                scene['text'],
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              if (scene['hasDirectorCut'] == true) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.movie_creation, size: 16, color: Colors.blue[700]),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        scene['directorName'],
+                        style: TextStyle(
+                          color: Colors.blue[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -697,10 +942,91 @@ class SceneCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    scene['text'],
-                    style: const TextStyle(fontSize: 16),
-                  ),
+                  if (scene['hasDirectorCut'] == true) ...[
+                    const Text(
+                      'Original Scene',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      scene['originalText'] ?? '',
+                      style: TextStyle(
+                        color: Colors.grey[800],
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.movie_creation, color: Colors.blue[700]),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  scene['directorName'],
+                                  style: TextStyle(
+                                    color: Colors.blue[700],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Reimagined Scene',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            scene['text'],
+                            style: const TextStyle(
+                              height: 1.5,
+                            ),
+                          ),
+                          if (scene['directorNotes'] != null) ...[
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Director\'s Notes',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              scene['directorNotes'],
+                              style: TextStyle(
+                                color: Colors.blue[900],
+                                height: 1.5,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      scene['text'],
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   const SizedBox(height: 16),
                   _buildVideoSection(context),
                   const SizedBox(height: 16),

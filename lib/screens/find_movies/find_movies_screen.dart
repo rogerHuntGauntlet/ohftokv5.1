@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/movie/movie_service.dart';
 import '../movie/movie_scenes_screen.dart';
+import '../movie/movie_video_player_screen.dart';
 
 class FindMoviesScreen extends StatelessWidget {
   const FindMoviesScreen({Key? key}) : super(key: key);
@@ -178,6 +179,27 @@ class FindMoviesScreen extends StatelessWidget {
                                       ),
                                       Row(
                                         children: [
+                                          if (scenes.isNotEmpty)
+                                            TextButton.icon(
+                                              onPressed: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) => MovieVideoPlayerScreen(
+                                                      scenes: scenes,
+                                                      movieId: movie['documentId'],
+                                                      userId: movie['userId'],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              icon: const Icon(Icons.play_circle_filled, size: 16),
+                                              label: const Text('Watch Movie'),
+                                              style: TextButton.styleFrom(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                minimumSize: Size.zero,
+                                              ),
+                                            ),
+                                          const SizedBox(width: 16),
                                           Icon(
                                             Icons.visibility,
                                             size: 16,

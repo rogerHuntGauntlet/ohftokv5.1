@@ -153,7 +153,7 @@ class MoviesTab extends StatelessWidget {
   int _getIncompleteScenesCount(Map<String, dynamic> movie) {
     try {
       final scenes = movie['scenes'] as List<dynamic>? ?? [];
-      final incompleteCount = scenes.where((scene) => scene['status'] != 'complete').length;
+      final incompleteCount = scenes.where((scene) => scene['status'] != 'completed').length;
       developer.log('Counting incomplete scenes:', error: {
         'movieId': movie['documentId'],
         'totalScenes': scenes.length,
