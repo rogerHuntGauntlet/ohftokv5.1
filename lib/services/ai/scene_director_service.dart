@@ -89,6 +89,14 @@ class SceneDirectorService {
 
       try {
         final jsonResponse = json.decode(messageContent.text!) as Map<String, dynamic>;
+        
+        // Check if we have valid fields
+        if (!jsonResponse.containsKey('reimaginedScene') || !jsonResponse.containsKey('directorNotes')) {
+          print('Invalid JSON structure: ${messageContent.text}');
+          // Fall back to text parsing if JSON is invalid
+          return _parseResponse(messageContent.text!, directorName);
+        }
+        
         return SceneReconception(
           sceneDescription: jsonResponse['reimaginedScene'] as String? ?? '',
           directorNotes: jsonResponse['directorNotes'] as String? ?? '',
@@ -97,7 +105,8 @@ class SceneDirectorService {
       } catch (e) {
         print('JSON parsing error: $e');
         print('Raw response: ${messageContent.text}');
-        throw Exception('Failed to parse director\'s response. Please try again.');
+        // Fall back to text parsing if JSON parsing fails
+        return _parseResponse(messageContent.text!, directorName);
       }
     } catch (e) {
       if (e.toString().contains('timed out')) {

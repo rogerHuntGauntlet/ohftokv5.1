@@ -69,29 +69,20 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
   }
 
   Future<void> _handleScenesUpdated(List<Map<String, dynamic>> updatedScenes) async {
-    // Set flag to ignore the next Firestore update since we're about to make one
-    _ignoreNextFirestoreUpdate = true;
+    print('🔄 _handleScenesUpdated called with ${updatedScenes.length} scenes');
     
-    // Find deleted scenes by comparing with current scenes
-    final deletedScenes = _scenes.where((oldScene) => 
-      !updatedScenes.any((newScene) => newScene['documentId'] == oldScene['documentId'])
-    ).toList();
-
-    // Update local state immediately
-    setState(() {
-      _scenes = List<Map<String, dynamic>>.from(updatedScenes);
-    });
-
-    // Update Firestore
     try {
-      // Delete removed scenes from Firestore
-      for (var deletedScene in deletedScenes) {
-        if (deletedScene['documentId'] != null) {
-          await _movieService.deleteScene(widget.movieId, deletedScene['documentId']);
-        }
+      // Set flag to ignore the next Firestore update since we're about to make one
+      _ignoreNextFirestoreUpdate = true;
+      
+      // Update local state first
+      if (mounted) {
+        setState(() {
+          _scenes = List<Map<String, dynamic>>.from(updatedScenes);
+        });
       }
 
-      // Update remaining scenes
+      // Then update Firestore in the background
       for (var scene in updatedScenes) {
         if (scene['documentId'] != null) {
           await _movieService.updateScene(
@@ -102,7 +93,7 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
         }
       }
     } catch (e) {
-      print('Error updating scenes in Firestore: $e');
+      print('❌ Error in _handleScenesUpdated: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -115,19 +106,23 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
   }
 
   Future<void> _updateSceneInList(Map<String, dynamic> updatedScene) async {
-    // Set flag to ignore the next Firestore update since we're about to make one
-    _ignoreNextFirestoreUpdate = true;
-
-    // Update local state immediately
-    setState(() {
-      final index = _scenes.indexWhere((s) => s['documentId'] == updatedScene['documentId']);
-      if (index != -1) {
-        _scenes[index] = Map<String, dynamic>.from(updatedScene);
-      }
-    });
-
-    // Update Firestore
+    print('🔄 _updateSceneInList called with scene: ${updatedScene['documentId']}');
+    
     try {
+      // Set flag to ignore the next Firestore update
+      _ignoreNextFirestoreUpdate = true;
+
+      // Update local state first
+      if (mounted) {
+        setState(() {
+          final index = _scenes.indexWhere((s) => s['documentId'] == updatedScene['documentId']);
+          if (index != -1) {
+            _scenes[index] = Map<String, dynamic>.from(updatedScene);
+          }
+        });
+      }
+
+      // Then update Firestore in the background
       if (updatedScene['documentId'] != null) {
         await _movieService.updateScene(
           movieId: widget.movieId,
@@ -136,17 +131,20 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
         );
       }
     } catch (e) {
-      print('Error updating scene in Firestore: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving changes: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('❌ Error in _updateSceneInList: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving changes: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _uploadVideo(BuildContext context, Map<String, dynamic> scene, bool fromCamera) async {
+    print('🎥 Starting video upload for scene: ${scene['documentId']}');
     final progressController = StreamController<double>();
     bool hasError = false;
 
@@ -157,6 +155,7 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
         builder: (context) => VideoUploadModal(
           progressStream: progressController.stream,
           onCancel: () {
+            print('❌ Upload cancelled by user');
             progressController.close();
             Navigator.of(context).pop();
           },
@@ -169,10 +168,12 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
         fromCamera: fromCamera,
         onProgress: (progress) {
           if (!progressController.isClosed) {
+            print('📈 Upload progress: ${(progress * 100).toStringAsFixed(1)}%');
             progressController.add(progress);
           }
         },
         onComplete: (result) {
+          print('✅ Video upload complete. VideoUrl: ${result['videoUrl']}');
           if (!mounted) return;
           
           final updatedScene = {
@@ -183,13 +184,37 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
             'videoType': 'user',
           };
           
-          _updateSceneInList(updatedScene);
-
+          print('🔄 Updating scene with new video data');
+          // First update the progress to 100%
           if (!progressController.isClosed) {
             progressController.add(1.0);
           }
+
+          // Wait a moment for the progress bar to complete
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              // Dismiss the dialog
+              Navigator.of(context).pop();
+              
+              // Then update the scene data
+              _updateSceneInList(updatedScene).then((_) {
+                print('✅ Scene update complete');
+                
+                if (mounted) {
+                  print('🎉 Showing success message to user');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Video uploaded successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              });
+            }
+          });
         },
         onError: (error) {
+          print('❌ Upload error: $error');
           hasError = true;
           if (mounted) {
             Navigator.of(context).pop();
@@ -202,22 +227,8 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
           }
         },
       );
-
-      if (!hasError) {
-        await Future.delayed(const Duration(seconds: 1));
-
-        if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Video uploaded successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
     } catch (e) {
-      print('Upload error: $e');
+      print('❌ Unexpected upload error: $e');
       if (mounted && !hasError) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -361,19 +372,26 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                     ? null
                     : () async {
                         try {
+                          // Close the initial dialog
                           Navigator.of(context).pop();
+                          
                           final progressController = StreamController<String>();
+                          BuildContext? dialogContext;
 
-                          if (!context.mounted) return;
+                          if (!mounted) return;
+                          // Show the generation modal
                           showDialog(
                             context: context,
                             barrierDismissible: false,
-                            builder: (context) => SceneGenerationModal(
-                              originalIdea: widget.movieIdea,
-                              continuationIdea: _continuationIdea,
-                              progressStream: progressController.stream,
-                              onRetry: _showAddScenesDialog,
-                            ),
+                            builder: (context) {
+                              dialogContext = context;
+                              return SceneGenerationModal(
+                                originalIdea: widget.movieIdea,
+                                continuationIdea: _continuationIdea,
+                                progressStream: progressController.stream,
+                                onRetry: _showAddScenesDialog,
+                              );
+                            },
                           );
 
                           try {
@@ -386,26 +404,33 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                               },
                             );
 
-                            if (!context.mounted) return;
-                            Navigator.of(context).pop();
+                            // Close the generation modal
+                            if (dialogContext != null && mounted) {
+                              Navigator.of(dialogContext!).pop();
+                            }
 
-                            setState(() {
-                              _scenes = [..._scenes, ...newScenes];
-                            });
+                            if (mounted) {
+                              setState(() {
+                                _scenes = [..._scenes, ...newScenes];
+                              });
 
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('${newScenes.length} new scenes added successfully!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('${newScenes.length} new scenes added successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
                           } catch (e) {
                             progressController.addError(e.toString());
                             await Future.delayed(const Duration(seconds: 3));
                             
-                            if (context.mounted) {
-                              Navigator.of(context).pop();
+                            // Close the generation modal on error
+                            if (dialogContext != null && mounted) {
+                              Navigator.of(dialogContext!).pop();
+                            }
+
+                            if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('Error: $e'),
@@ -417,13 +442,14 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
                             await progressController.close();
                           }
                         } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
                         }
                       },
                 child: const Text('Generate Scene'),
@@ -531,25 +557,42 @@ class _MovieScenesScreenState extends State<MovieScenesScreen> {
           } else {
             // Only update from Firestore if we haven't just made a local change
             final firestoreScenes = snapshot.data!;
-            if (mounted) {
-              // Deep compare scenes to check for actual changes
-              bool hasChanges = _scenes.length != firestoreScenes.length;
-              if (!hasChanges) {
-                for (int i = 0; i < _scenes.length; i++) {
-                  if (_scenes[i]['documentId'] != firestoreScenes[i]['documentId'] ||
-                      _scenes[i]['hasDirectorCut'] != firestoreScenes[i]['hasDirectorCut'] ||
-                      _scenes[i]['text'] != firestoreScenes[i]['text']) {
-                    hasChanges = true;
-                    break;
-                  }
+            
+            // Deep compare scenes to check for actual changes
+            bool hasChanges = _scenes.length != firestoreScenes.length;
+            if (!hasChanges) {
+              for (int i = 0; i < _scenes.length; i++) {
+                print('🔍 Comparing scene ${_scenes[i]['documentId']}:');
+                print('   Local - videoUrl: ${_scenes[i]['videoUrl']}, status: ${_scenes[i]['status']}');
+                print('   Firestore - videoUrl: ${firestoreScenes[i]['videoUrl']}, status: ${firestoreScenes[i]['status']}');
+                
+                if (_scenes[i]['documentId'] != firestoreScenes[i]['documentId'] ||
+                    _scenes[i]['hasDirectorCut'] != firestoreScenes[i]['hasDirectorCut'] ||
+                    _scenes[i]['text'] != firestoreScenes[i]['text'] ||
+                    _scenes[i]['videoUrl'] != firestoreScenes[i]['videoUrl'] ||
+                    _scenes[i]['status'] != firestoreScenes[i]['status'] ||
+                    _scenes[i]['videoType'] != firestoreScenes[i]['videoType']) {
+                  print('⚠️ Scene ${_scenes[i]['documentId']} has changes');
+                  hasChanges = true;
+                  break;
                 }
               }
-              if (hasChanges) {
-                _scenes = List<Map<String, dynamic>>.from(firestoreScenes);
-              }
+            }
+            
+            if (hasChanges) {
+              print('🔄 Updating local scenes from Firestore');
+              // Schedule the setState for the next frame
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _scenes = List<Map<String, dynamic>>.from(firestoreScenes);
+                  });
+                }
+              });
             }
           }
 
+          // Use the current state for rendering
           return SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.all(16.0),

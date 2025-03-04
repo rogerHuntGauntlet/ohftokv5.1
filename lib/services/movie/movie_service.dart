@@ -578,20 +578,31 @@ class MovieService {
     }
   }
 
+  /// Updates a specific scene in a movie
   Future<void> updateScene({
     required String movieId,
     required String sceneId,
     required Map<String, dynamic> sceneData,
   }) async {
     try {
-      await FirebaseFirestore.instance
-        .collection('movies')
-        .doc(movieId)
-        .collection('scenes')
-        .doc(sceneId)
-        .update(sceneData);
+      print('🔄 Updating scene $sceneId in movie $movieId');
+      final sceneRef = FirebaseFirestore.instance
+          .collection('movies')
+          .doc(movieId)
+          .collection('scenes')
+          .doc(sceneId);
+
+      // Ensure we have all required fields
+      final updatedData = {
+        ...sceneData,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await sceneRef.update(updatedData);
+      print('✅ Scene update successful');
     } catch (e) {
-      throw Exception('Failed to update scene: $e');
+      print('❌ Error updating scene: $e');
+      throw 'Failed to update scene: $e';
     }
   }
 

@@ -285,33 +285,63 @@ class SceneCard extends StatelessWidget {
 
   Future<void> _handleDirectorCut(BuildContext context) async {
     SceneReconception? result;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => DirectorCutDialog(
-        sceneText: scene['text'],
-        onDirectorCutSelected: (directorCut) {
-          result = directorCut;
-          Navigator.of(context).pop();
-        },
-      ),
-    );
-
-    if (result != null && context.mounted) {
-      // Update the scene with the director's cut info
-      final updatedScene = Map<String, dynamic>.from(scene);
-      updatedScene['originalText'] = scene['text'];
-      updatedScene['text'] = result!.sceneDescription;
-      updatedScene['directorNotes'] = result!.directorNotes;
-      updatedScene['directorName'] = result!.directorName;
-      updatedScene['hasDirectorCut'] = true;
-      onEdit(updatedScene);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Director\'s cut applied successfully!'),
-          backgroundColor: Colors.green,
+    
+    try {
+      // Show the dialog and wait for result
+      result = await showDialog<SceneReconception?>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => DirectorCutDialog(
+          sceneText: scene['text'],
+          onDirectorCutSelected: (directorCut) {
+            Navigator.of(dialogContext).pop(directorCut); // Return the result instead of storing in variable
+          },
         ),
       );
+
+      // If we got a result, update the scene
+      if (result != null && context.mounted) {
+        // Create updated scene data
+        final updatedScene = Map<String, dynamic>.from(scene);
+        updatedScene['originalText'] = scene['text'];
+        updatedScene['text'] = result.sceneDescription;
+        updatedScene['directorNotes'] = result.directorNotes;
+        updatedScene['directorName'] = result.directorName;
+        updatedScene['hasDirectorCut'] = true;
+        updatedScene['updatedAt'] = FieldValue.serverTimestamp();
+        
+        // First update Firestore
+        final movieService = MovieService();
+        await movieService.updateScene(
+          movieId: movieId,
+          sceneId: scene['documentId'],
+          sceneData: updatedScene,
+        );
+
+        // Then update the UI immediately
+        if (context.mounted) {
+          // Update the parent component
+          onEdit(updatedScene);
+          
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Director\'s cut applied successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error applying director\'s cut: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error applying director\'s cut: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

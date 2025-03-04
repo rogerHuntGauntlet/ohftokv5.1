@@ -14,10 +14,10 @@ dependencies:
   google_fonts: ^6.1.0
 
   # Firebase packages
-  firebase_core: ^2.24.2
-  firebase_auth: ^4.15.3
-  cloud_firestore: ^4.13.6
-  firebase_storage: ^11.5.6
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.16.0
+  cloud_firestore: ^4.17.5
+  firebase_storage: ^11.6.5
   firebase_messaging: ^14.7.10
   firebase_app_check: ^0.2.1+8
 
@@ -58,7 +58,7 @@ dependencies:
   pinecone: ^0.7.2
 
   # Cloud Functions
-  cloud_functions: ^4.5.8
+  cloud_functions: ^4.7.6
 
   # Image picker and file handling
   image_picker: ^1.0.7
